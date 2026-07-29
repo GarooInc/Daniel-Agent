@@ -117,7 +117,13 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 Los 3 pasos de prueba end-to-end (askDaniel en vivo, Slack + agente en vivo, escalación a Monday desde Slack) ya se confirmaron en vivo el 2026-07-29 — ver detalle arriba. Queda:
 
 1. **(Backlog, no bloqueante)** Tests básicos para `knowledge-base/`, `agent/` e `integrations/monday/`, y considerar clases de error custom — ver la auditoría arriba.
-2. **Evaluar mover el bot a un VPS** — Socket Mode necesita estar conectado 24/7; depender de la red local de una máquina/laptop no escala para dejarlo corriendo de forma permanente. Pendiente: elegir VPS, definir proceso de deploy/secrets, y un process manager (`pm2`/`systemd`) para que se reinicie solo.
+2. **Mover el bot a un VPS — EN CURSO (empezado 2026-07-29)**. Decisiones ya tomadas:
+   - **VPS**: Hostinger KVM 1, `srv853599.hstgr.cloud` / IP `82.29.180.111`, Frankfurt, usuario `root`. Docker ya viene instalado. **Es infraestructura compartida de RedTec**: ya corre ahí un proyecto Docker Compose llamado `traefik` (1 contenedor) y un firewall del panel de Hostinger llamado `RedTecAi-Capa1` (2 reglas) — o sea, este VPS probablemente aloja o va a alojar más de un bot de RedTec, no es exclusivo de Daniel. Tenerlo en cuenta antes de asumir puertos/redes libres al escribir el `docker-compose.yml` de Daniel (revisar si conviene unirse a la red de Traefik en vez de crear una aislada).
+   - **Deploy**: `git clone` del repo (privado, `GarooInc/Daniel-Agent`) directo en el VPS, usando una deploy key generada en el propio VPS (no la key personal de Jorge). `docker compose up -d --build` para levantarlo.
+   - **Secrets**: `.env` real se sube al VPS por `scp` desde la Mac de Jorge (no viaja por git, sigue en `.gitignore`), y Docker Compose lo lee vía `env_file`.
+   - **Auth SSH**: se agregó la public key de la Mac de Jorge (`~/.ssh/id_rsa.pub`) a `authorized_keys` del VPS vía la Terminal web del panel de Hostinger, para no pasar la contraseña root por el chat.
+   - **Bloqueado ahora mismo**: conexión SSH al puerto 22 da timeout (probado desde la Mac de Jorge y desde el propio Claude Code). Está en investigación si el firewall `RedTecAi-Capa1` del panel de Hostinger (Seguridad → Firewall) tiene o no una regla que permita el puerto 22, y si está activado o no. Si el firewall no es la causa, puede ser que el VPS (recién creado) todavía esté terminando de inicializar la red.
+   - **Todavía sin definir**: si se necesita un process manager adicional dentro del contenedor (Docker Compose con `restart: unless-stopped` puede ser suficiente y evitar `pm2`/`systemd` extra).
 
 ## Referencia rápida del stack
 
