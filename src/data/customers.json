@@ -1,0 +1,86 @@
+[
+  {
+    "id": "cust-001",
+    "nombre": "Marcela Ibáñez",
+    "email": "marcela.ibanez@construsur.com",
+    "empresa": "ConstruSur",
+    "producto": "Isabella",
+    "plan": "Pro",
+    "estadoCuenta": "activo",
+    "fechaAlta": "2026-02-14",
+    "canalPreferido": "WhatsApp",
+    "notas": "Usa Isabella para calificar leads de campañas de Meta Ads en la zona sur."
+  },
+  {
+    "id": "cust-002",
+    "nombre": "Federico Ríos",
+    "email": "federico@riosabogados.com",
+    "empresa": "Ríos & Asociados",
+    "producto": "Isabella",
+    "plan": "Starter",
+    "estadoCuenta": "moroso",
+    "fechaAlta": "2026-05-02",
+    "canalPreferido": "Web",
+    "notas": "Pago de mayo rechazado por tarjeta vencida. Cuenta en gracia hasta regularizar."
+  },
+  {
+    "id": "cust-003",
+    "nombre": "Valentina Suárez",
+    "email": "valen.suarez@brotestudio.com",
+    "empresa": "Brote Studio",
+    "producto": "Sofi",
+    "plan": "Enterprise",
+    "estadoCuenta": "activo",
+    "fechaAlta": "2025-11-20",
+    "canalPreferido": "Slack",
+    "notas": "Cliente antiguo, publica en LinkedIn e Instagram con aprobación manual activada."
+  },
+  {
+    "id": "cust-004",
+    "nombre": "Tomás Herrera",
+    "email": "tomas@herreradigital.io",
+    "empresa": "Herrera Digital",
+    "producto": "Sofi",
+    "plan": "Pro",
+    "estadoCuenta": "en_prueba",
+    "fechaAlta": "2026-07-10",
+    "canalPreferido": "WhatsApp",
+    "notas": "Está en período de prueba de 14 días, termina el 2026-07-24."
+  },
+  {
+    "id": "cust-005",
+    "nombre": "Lucía Fernández",
+    "email": "lucia.fernandez@panaderiaelsol.com",
+    "empresa": "Panadería El Sol",
+    "producto": "widget-chatbot",
+    "plan": "Starter",
+    "estadoCuenta": "activo",
+    "fechaAlta": "2026-04-01",
+    "canalPreferido": "Web",
+    "notas": "Widget instalado en tienda online, consultas frecuentes sobre horarios y envíos."
+  },
+  {
+    "id": "cust-006",
+    "nombre": "Andrés Molina",
+    "email": "andres.molina@retailplus.com",
+    "empresa": "RetailPlus",
+    "producto": "widget-chatbot",
+    "plan": "Enterprise",
+    "estadoCuenta": "activo",
+    "fechaAlta": "2025-09-15",
+    "canalPreferido": "Web",
+    "notas": "Base de conocimiento del widget cargada con catálogo de más de 500 productos."
+  },
+  {
+    "id": "cust-007",
+    "nombre": "Camila Ortiz",
+    "email": "camila.ortiz@nortetech.com",
+    "empresa": "NorteTech",
+    "producto": "Isabella",
+    "plan": "Enterprise",
+    "estadoCuenta": "cancelado",
+    "fechaAlta": "2025-06-01",
+    "canalPreferido": "WhatsApp",
+    "notas": "Canceló el servicio en 2026-06-30 por reducción de presupuesto de marketing."
+  }
+]

@@ -93,18 +93,20 @@ Guardadas en `.env` (gitignored; ver `.env.example` para la plantilla): `OPENROU
 
 - **URL**: `redtechai.monday.com/boards/5101177200`
 - **Board ID**: `5101177200`
-- Creado a partir de la plantilla "Soporte/procesamiento de tickets" (Tickets de TI/soporte con IA), con 2 columnas agregadas manualmente para cubrir lo que necesita Daniel.
-- **Columnas clave para la integración** (id → título → tipo):
-  - `name` → Nombre
+- Creado a partir de la plantilla "Soporte/procesamiento de tickets" (Tickets de TI/soporte con IA), con columnas agregadas manualmente para cubrir lo que necesita Daniel (2 al definir el diseño + 1 más agregada después vía API, ver abajo).
+- **Columnas clave para la integración** (id → título → tipo → valores):
+  - `name` → Nombre (nombre del item = nombre del cliente)
   - `text` → E-mail
   - `text1` → Solicitud (resumen del problema)
-  - `status6` → Urgencia (prioridad)
-  - `status4` → Tipo de solicitud
-  - `status2` → Estado
-  - `color_mm5p5k5s` → **Canal de origen** (agregada — Slack/Widget/WhatsApp)
+  - `status6` → Urgencia → `"No es urgente"` / `"Urgente"`
+  - `status4` → Tipo de solicitud → `"Problema"` / `"Solicitud"` / `"Pregunta"`
+  - `color_mm5p5k5s` → **Canal de origen** (agregada) → en minúscula: `widget` / `whatsapp` / `instagram` / `messenger` / `telegram` / `default` / `slack`
   - `long_text_mm5per1v` → **Qué se intentó ya** (agregada, long_text)
-- Columnas de la plantilla que no se usan por ahora (traducción automática, sentimiento, TL:DR, tiempos de respuesta) se dejaron sin tocar — no estorban y podrían servir en fase 2.
-- Acceso verificado vía API GraphQL de Monday (`api.monday.com/v2`) usando `MONDAY_API_TOKEN` — no hay conector MCP de Monday disponible en esta sesión, así que la integración real será directo a la API GraphQL.
+  - `color_mm5qwh54` → **Producto** (agregada 2026-07-29 vía API, no estaba en el diseño original) → `"Isabella"` / `"Sofi"` / `"Widget-chatbot"` / `"Otro"` — para que soporte pueda filtrar/reportar tickets por producto
+  - `status2` → Estado (no se setea al crear el ticket; Monday lo deja en su default `"En curso"`)
+- Columnas de la plantilla que no se usan por ahora: traducción automática, sentimiento, TL:DR, tiempos de respuesta (no estorban, podrían servir en fase 2), y `status63` → Categoría (`Equipo`/`VPN`/`Software`/`General`) que parece pensada para tickets de soporte **interno** (fase 2), no para clientes externos — se dejó intacta a propósito.
+- Etiquetas exactas de cada columna de tipo `status` confirmadas contra el tablero real vía `settings_str` (consulta GraphQL), no asumidas — ver `ESTADO-PROYECTO.md` para el detalle de cuándo y cómo se verificaron.
+- Acceso verificado vía API GraphQL de Monday (`api.monday.com/v2`) usando `MONDAY_API_TOKEN`. Apareció disponible un conector MCP de Monday.com (`claude.ai monday.com`, requiere autenticar con `/mcp`) que no existía cuando se definió el stack — no reemplazó la integración GraphQL directa (ya construida y probada), pero queda como opción para inspeccionar el tablero interactivamente si hace falta.
 
 ## Estado actual
 

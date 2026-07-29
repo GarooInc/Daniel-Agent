@@ -1,17 +1,10 @@
 import "dotenv/config";
+import { REQUIRED_ENV_VARS, getMissingEnvVars } from "./config/env.js";
 
-const requiredEnvVars = [
-  "OPENROUTER_API_KEY",
-  "SLACK_APP_TOKEN",
-  "SLACK_BOT_TOKEN",
-  "SLACK_SIGNING_SECRET",
-  "MONDAY_API_TOKEN",
-];
-
-const missing = requiredEnvVars.filter((name) => !process.env[name]);
+const missing = getMissingEnvVars();
 
 console.log("Daniel — agente de soporte de RedTec");
-console.log(`Variables de entorno cargadas: ${requiredEnvVars.length - missing.length}/${requiredEnvVars.length}`);
+console.log(`Variables de entorno cargadas: ${REQUIRED_ENV_VARS.length - missing.length}/${REQUIRED_ENV_VARS.length}`);
 
 if (missing.length > 0) {
   console.log(`Faltan: ${missing.join(", ")}`);

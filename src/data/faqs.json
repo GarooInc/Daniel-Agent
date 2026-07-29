@@ -1,0 +1,130 @@
+[
+  {
+    "id": "isabella-001",
+    "producto": "Isabella",
+    "categoria": "uso",
+    "pregunta": "¿Cómo agenda una cita Isabella con un lead?",
+    "respuesta": "Isabella conversa con el lead por WhatsApp o el canal configurado, califica su interés y, si el lead está listo, le ofrece horarios disponibles tomados directamente de tu calendario conectado. Al confirmar, crea el evento y notifica al vendedor asignado.",
+    "tags": ["citas", "calendario", "agendamiento"]
+  },
+  {
+    "id": "isabella-002",
+    "producto": "Isabella",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo conecto Isabella con mi calendario?",
+    "respuesta": "Desde el panel de administración, sección Integraciones > Calendario, autorizá el acceso con la cuenta de Google o Outlook donde llevás tus citas. Isabella sincroniza la disponibilidad cada 5 minutos.",
+    "tags": ["calendario", "integraciones", "configuracion"]
+  },
+  {
+    "id": "isabella-003",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella puede calificar leads automáticamente?",
+    "respuesta": "Sí. Isabella hace preguntas de calificación (presupuesto, urgencia, autoridad de compra) definidas en tu guion de ventas y etiqueta al lead como frío, tibio o caliente antes de pasarlo a un vendedor humano.",
+    "tags": ["leads", "calificacion", "ventas"]
+  },
+  {
+    "id": "isabella-004",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Qué canales de entrada soporta Isabella?",
+    "respuesta": "Isabella recibe leads desde formularios de Meta Ads, WhatsApp Business y formularios web embebidos. El canal de salida principal para conversar con el lead es WhatsApp.",
+    "tags": ["canales", "meta-ads", "whatsapp"]
+  },
+  {
+    "id": "isabella-005",
+    "producto": "Isabella",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo cambio el guion de ventas que usa Isabella?",
+    "respuesta": "El guion se edita en el panel de administración, sección Isabella > Guion de ventas. Los cambios se aplican a conversaciones nuevas de inmediato; las conversaciones ya en curso siguen con el guion que tenían al empezar.",
+    "tags": ["guion", "script", "configuracion"]
+  },
+  {
+    "id": "isabella-006",
+    "producto": "Isabella",
+    "categoria": "facturacion",
+    "pregunta": "¿Cómo se cobra el uso de Isabella?",
+    "respuesta": "Isabella se factura mensualmente según el plan contratado (Starter, Pro o Enterprise), con un límite de conversaciones activas por mes. Si superás el límite, se cobran conversaciones adicionales por bloque de 100.",
+    "tags": ["facturacion", "planes", "precios"]
+  },
+  {
+    "id": "sofi-001",
+    "producto": "Sofi",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Qué tipo de contenido genera Sofi?",
+    "respuesta": "Sofi genera ideas y borradores de contenido para redes sociales: carruseles de LinkedIn, posts de Instagram, hilos de X y newsletters cortas, basados en tendencias del sector y en tu calendario de marketing.",
+    "tags": ["contenido", "redes-sociales", "marketing"]
+  },
+  {
+    "id": "sofi-002",
+    "producto": "Sofi",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo conecto mis redes sociales a Sofi?",
+    "respuesta": "En el panel de administración, sección Sofi > Cuentas conectadas, autorizá el acceso a LinkedIn, Instagram o X con las credenciales de la cuenta de la empresa. Sofi necesita permisos de publicación para poder programar posts.",
+    "tags": ["integraciones", "redes-sociales", "configuracion"]
+  },
+  {
+    "id": "sofi-003",
+    "producto": "Sofi",
+    "categoria": "uso",
+    "pregunta": "¿Sofi publica automáticamente o necesita aprobación?",
+    "respuesta": "Por defecto, Sofi deja cada pieza de contenido en estado 'Borrador' esperando aprobación humana antes de publicar. Se puede activar publicación automática por tipo de contenido desde Configuración > Aprobaciones.",
+    "tags": ["aprobacion", "publicacion", "flujo"]
+  },
+  {
+    "id": "sofi-004",
+    "producto": "Sofi",
+    "categoria": "configuracion",
+    "pregunta": "¿Puedo definir un tono de marca específico para Sofi?",
+    "respuesta": "Sí. En Sofi > Voz de marca podés cargar ejemplos de contenido, palabras a evitar y una descripción del tono (formal, cercano, técnico, etc.). Sofi los usa como referencia en cada pieza que genera.",
+    "tags": ["tono", "marca", "personalizacion"]
+  },
+  {
+    "id": "sofi-005",
+    "producto": "Sofi",
+    "categoria": "facturacion",
+    "pregunta": "¿Qué planes tiene Sofi?",
+    "respuesta": "Sofi tiene plan Starter (hasta 15 piezas de contenido al mes, 1 red social), Pro (hasta 60 piezas, 3 redes sociales) y Enterprise (piezas ilimitadas, redes ilimitadas y soporte prioritario).",
+    "tags": ["facturacion", "planes", "precios"]
+  },
+  {
+    "id": "widget-001",
+    "producto": "widget-chatbot",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo instalo el widget en mi sitio web?",
+    "respuesta": "Copiá el snippet de instalación desde el panel de administración, sección Widget > Instalación, y pegalo antes del cierre de la etiqueta </body> en tu sitio. El widget aparece automáticamente unos minutos después.",
+    "tags": ["instalacion", "snippet", "configuracion"]
+  },
+  {
+    "id": "widget-002",
+    "producto": "widget-chatbot",
+    "categoria": "configuracion",
+    "pregunta": "¿Puedo personalizar los colores y el logo del widget?",
+    "respuesta": "Sí, desde Widget > Apariencia podés cambiar el color principal, la posición en pantalla (izquierda/derecha), el logo y el mensaje de bienvenida.",
+    "tags": ["personalizacion", "apariencia", "branding"]
+  },
+  {
+    "id": "widget-003",
+    "producto": "widget-chatbot",
+    "categoria": "funcionalidades",
+    "pregunta": "¿El widget funciona bien en dispositivos móviles?",
+    "respuesta": "Sí, el widget se adapta automáticamente a pantallas móviles y se muestra como una ventana de pantalla completa en vez de un recuadro flotante.",
+    "tags": ["mobile", "responsive", "funcionalidades"]
+  },
+  {
+    "id": "widget-004",
+    "producto": "widget-chatbot",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo entreno al widget con la información de mi negocio?",
+    "respuesta": "Cargá documentos, PDFs o un enlace a tu sitio web en Widget > Base de conocimiento. El widget indexa ese contenido y lo usa para responder preguntas de tus visitantes.",
+    "tags": ["entrenamiento", "base-de-conocimiento", "configuracion"]
+  },
+  {
+    "id": "widget-005",
+    "producto": "widget-chatbot",
+    "categoria": "uso",
+    "pregunta": "¿Qué pasa si el widget no puede responder una pregunta de un visitante?",
+    "respuesta": "El widget le avisa al visitante que va a derivar la consulta a un humano, y crea una notificación para el equipo de soporte con el historial de la conversación.",
+    "tags": ["escalacion", "soporte", "fallback"]
+  }
+]
