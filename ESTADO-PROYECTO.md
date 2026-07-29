@@ -7,13 +7,15 @@ Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, par
 ## Setup en una máquina nueva
 
 ```bash
-git clone <repo>
+git clone https://github.com/GarooInc/Daniel-Agent.git
 cd Daniel-Agent
 npm install
 cp .env.example .env
 # Llenar .env con las credenciales reales (ver sección "Credenciales" abajo)
 npm run dev
 ```
+
+**Repo movido a la organización (2026-07-29)**: el repo ahora vive en `GarooInc/Daniel-Agent` (antes en la cuenta personal de Jorge). Si tenías un clone viejo, actualizá el remote: `git remote set-url origin https://github.com/GarooInc/Daniel-Agent.git`.
 
 **El `.env` nunca se sube a git** (está en `.gitignore`). Cada máquina necesita su propio `.env` con las credenciales llenadas a mano — no viajan con el repo.
 
@@ -26,7 +28,7 @@ Todas ya generadas y en uso — ver `.env.example` para la plantilla. Si necesit
 - `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`
 - `MONDAY_API_TOKEN`
 
-**Estado de esta máquina específica** (la que usó esta sesión de trabajo): tiene un `.env` con `MONDAY_API_TOKEN` real cargado (por eso se pudo probar la escalación a Monday end-to-end acá mismo), pero `OPENROUTER_API_KEY` y las tres variables de Slack están vacías — por eso las pruebas de `askDaniel` y del bot de Slack quedaron pendientes en esta máquina. Si vas a retomar en otra PC, vas a necesitar las 5 credenciales completas ahí para poder probar todo de punta a punta.
+**Estado de esta máquina específica** (la Mac de Jorge, usada en la sesión del 2026-07-29): tiene las 5 credenciales reales cargadas en `.env` — se usó para confirmar el loop v1 completo en vivo (askDaniel, Slack, escalación a Monday, ver detalle abajo).
 
 ## Estructura del proyecto
 
@@ -85,10 +87,12 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 - [x] Dependencias base instaladas: `typescript`, `tsx`, `@types/node`, `dotenv`
 - [x] `src/index.ts` + `src/config/env.ts` — chequeo/carga tipada de variables de entorno. Verificado: corre con `npm run dev` y confirma que las 5 variables requeridas están presentes.
 - [x] `@slack/bolt` instalado (v5)
-- [x] `src/channels/slack/` — bot en Socket Mode (`npm run dev:slack`), conectado a `askDaniel` (ya no es el echo): `bot.ts` arma la app y `message-handler.ts` recibe el mensaje del canal, lo pasa a `askDaniel` y responde con lo que devuelve el agente (FAQs y estado de cuenta vía las tools). Si `askDaniel` tira error, responde con un mensaje de fallback avisando que va a escalar. `bot.ts` también maneja `SIGINT`/`SIGTERM` para cerrar la conexión Socket Mode prolijamente (`app.stop()`) antes de salir. Type-checkea limpio (`npx tsc --noEmit`). **Sin probar en vivo**: falta `SLACK_APP_TOKEN`/`SLACK_BOT_TOKEN`/`SLACK_SIGNING_SECRET`/`OPENROUTER_API_KEY` reales en el `.env` de esta máquina — falta correrlo con el bot añadido al workspace de Slack para confirmar la conexión Socket Mode + OpenRouter end-to-end.
+- [x] `src/channels/slack/` — bot en Socket Mode (`npm run dev:slack`), conectado a `askDaniel` (ya no es el echo): `bot.ts` arma la app y `message-handler.ts` recibe el mensaje del canal, lo pasa a `askDaniel` y responde con lo que devuelve el agente (FAQs y estado de cuenta vía las tools). Si `askDaniel` tira error, responde con un mensaje de fallback avisando que va a escalar. `bot.ts` también maneja `SIGINT`/`SIGTERM` para cerrar la conexión Socket Mode prolijamente (`app.stop()`) antes de salir. Type-checkea limpio (`npx tsc --noEmit`). **Probado en vivo (2026-07-29)**: conectado en Socket Mode a un canal real de Slack, responde con FAQs y estado de cuenta reales (no el echo viejo).
+  - **Requisitos de config de Slack para que el bot reciba mensajes en canales** (no obvios, no estaban documentados): el bot tiene que estar invitado al canal (`/invite @Daniel-Soporte`), y la app necesita en **Event Subscriptions → Subscribe to bot events** el evento `message.channels` (o `message.groups`/`message.im`/`message.mpim` según el tipo de canal) + el scope `channels:history` (o el equivalente) en **OAuth & Permissions**. Sin esto, Slack no entrega ningún evento al socket aunque el bot esté "conectado".
+  - **Bug encontrado y arreglado — duplicación de tickets**: Slack a veces reenvía el mismo evento de mensaje si el bot no lo reconoce como recibido con la suficiente rapidez, y como `askDaniel` (LLM + tool de Monday) puede tardar más de eso, se procesó el mismo mensaje dos veces y se crearon dos tickets duplicados en Monday con la misma info parafraseada distinto. Fix: `message-handler.ts` ahora dedupea por `client_msg_id` con una ventana de 60s antes de llamar a `askDaniel`. Reprobado en vivo: un solo ticket por mensaje.
 - [x] **Logging estructurado**: `src/config/logger.ts`, instancia de `pino` compartida (`pino-pretty` en dev — colores y timestamps legibles; JSON plano en producción vía `NODE_ENV=production`). Reemplaza los `console.log`/`console.error` en `channels/slack/bot.ts`, `channels/slack/message-handler.ts` y `agent/tools/escalate-to-monday.ts` (logea éxito/error al crear el ticket en Monday, para no tener fallos silenciosos ahí). Los entrypoints CLI (`src/index.ts`, `src/agent-cli.ts`) quedaron con `console.log` a propósito — son output directo para un humano corriéndolos una vez, no logs de un proceso corriendo. Probado en runtime con `tsx`, funciona.
 - [x] Base de conocimiento ficticia: `src/data/faqs.json` (16 FAQs de ejemplo: Isabella, Sofi, widget-chatbot — uso, configuración, funcionalidades, facturación) y `src/data/customers.json` (7 clientes/cuentas de ejemplo con distintos estados: activo, moroso, en_prueba, cancelado). Loader tipado en `src/knowledge-base/` (`faqs.ts`, `customers.ts`, `types.ts`) con `searchFaqs`, `getFaqsByProducto`, `getCustomerByEmail`, `getAllFaqs`, `getAllCustomers`. Probado en runtime con `tsx`, funciona.
-- [x] **Agente LangChain.js + OpenRouter**: `src/agent/` (`prompt.ts`, `model.ts`, `daniel.ts`, `tools/`), función `askDaniel(mensaje)` exportada desde `src/agent/index.ts`. Usa `ChatOpenAI` de `@langchain/openai` apuntando a `baseURL: https://openrouter.ai/api/v1` con `OPENROUTER_API_KEY`. Modelo default `openai/gpt-5-mini` (configurable con `OPENROUTER_MODEL` en `.env`; si las respuestas no convencen, probar `deepseek/deepseek-v4-pro`). Tres tools en `agent/tools/`: `buscar_faqs` (envuelve `searchFaqs`), `buscar_cliente` (envuelve `getCustomerByEmail`) y `escalar_a_monday` (crea el ticket, ver abajo). Loop manual de tool-calling (hasta 5 iteraciones, en `daniel.ts`) en vez de un agente prearmado de LangChain — más simple y suficiente para v1. Type-checkea limpio. Se puede probar suelto con `npx tsx src/agent-cli.ts "pregunta"` (`npm run dev:agent`). **Verificado hasta el límite de las credenciales de esta máquina**: sin `OPENROUTER_API_KEY` real no se pudo confirmar una respuesta completa, pero se probó que el flujo llega correctamente hasta la llamada HTTP a OpenRouter (falla con 401 esperado usando una key dummy) — o sea el wiring de LangChain + tools está bien armado, falta la prueba end-to-end con la key real.
+- [x] **Agente LangChain.js + OpenRouter**: `src/agent/` (`prompt.ts`, `model.ts`, `daniel.ts`, `tools/`), función `askDaniel(mensaje)` exportada desde `src/agent/index.ts`. Usa `ChatOpenAI` de `@langchain/openai` apuntando a `baseURL: https://openrouter.ai/api/v1` con `OPENROUTER_API_KEY`. Modelo default `openai/gpt-5-mini` (configurable con `OPENROUTER_MODEL` en `.env`; si las respuestas no convencen, probar `deepseek/deepseek-v4-pro`). Tres tools en `agent/tools/`: `buscar_faqs` (envuelve `searchFaqs`), `buscar_cliente` (envuelve `getCustomerByEmail`) y `escalar_a_monday` (crea el ticket, ver abajo). Loop manual de tool-calling (hasta 5 iteraciones, en `daniel.ts`) en vez de un agente prearmado de LangChain — más simple y suficiente para v1. Type-checkea limpio. Se puede probar suelto con `npx tsx src/agent-cli.ts "pregunta"` (`npm run dev:agent`). **Probado en vivo con `OPENROUTER_API_KEY` real (2026-07-29)**: `buscar_faqs` y `buscar_cliente` confirmados con respuestas completas y correctas.
 - [x] **Escalación a Monday.com**: `src/integrations/monday/` (`client.ts` — helper GraphQL genérico, `board.ts` — board ID `5101177200` y column IDs, `create-ticket.ts` — `createSupportTicket()`) + tool `escalar_a_monday` en `src/agent/tools/escalate-to-monday.ts`. El system prompt (`agent/prompt.ts`) ya instruye a Daniel a pedir nombre/email si faltan y a llamar a la tool para escalar en vez de solo decir que va a hacerlo. Columnas que se completan, con las etiquetas reales confirmadas contra el board (vía `settings_str` de cada columna, `NOTAS-INICIALES.md` no las tenía documentadas y las que yo había asumido inicialmente estaban mal):
   - email (`text`), resumen (`text1`), qué se intentó (`long_text_mm5per1v`) — texto libre.
   - urgencia (`status6`): `"No es urgente"` / `"Urgente"`.
@@ -97,6 +101,7 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
   - **producto** (`color_mm5qwh54`): `"Isabella"` / `"Sofi"` / `"Widget-chatbot"` / `"Otro"`. **Columna nueva, creada por mí en el tablero real** (no existía en la plantilla original) vía `create_column` de la API de Monday — le da al equipo de soporte una forma de filtrar/reportar tickets por producto, dato que Daniel ya conoce por el contexto de la conversación. La columna `Categoría` (`status63`: Equipo/VPN/Software/General) se dejó intacta a propósito — es para tickets de soporte interno (fase 2), no aplica a clientes externos.
   - Estado (`status2`) no se setea — Monday lo deja en su default (`"En curso"`) al crear el item.
   - **Probado end-to-end con el token real** (dos veces, ambos tickets de prueba ya borrados del tablero): un ticket inicial (item id `3122651184`) y uno después de sumar la columna Producto (item id `3122700705`) — ambos aceptados por Monday sin errores.
+  - **Probado disparado por Daniel desde Slack en vivo (2026-07-29)**: item `3124652000` (los dos anteriores, `3124599935`/`3124600455`, fueron el intento con el bug de duplicación — ver arriba — y quedaron sin borrar en el tablero real a propósito, no hacen daño). Campos bien completados en los tres.
 
 **Nota de red de esta máquina**: el fetch nativo de Node (`undici`) tiene timeouts intermitentes (`ETIMEDOUT`) contra hosts externos (pasó con `registry.npmjs.org`, `api.monday.com` y hasta `openrouter.ai`) que `curl` no sufre — parece un problema de resolución/preferencia IPv6 en esta máquina. Si el bot corriendo en otra máquina tiene llamadas que cuelgan o tardan mucho, probar arrancándolo con `NODE_OPTIONS="--dns-result-order=ipv4first" npm run dev:slack` antes de asumir que es un bug de la app.
 
@@ -109,10 +114,10 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 
 ## Pendientes / próximos pasos (en orden)
 
-1. **Probar `askDaniel` en vivo con `OPENROUTER_API_KEY` real** — correr `npm run dev:agent -- "¿Cómo conecto Isabella con mi calendario?"` en una máquina con `.env` lleno y confirmar que responde usando `buscar_faqs`, y probar también con un email de `customers.json` para `buscar_cliente`.
-2. **Probar el flujo completo Slack + agente en vivo** — con `.env` lleno (`SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `OPENROUTER_API_KEY`), correr `npm run dev:slack`, escribirle al bot en un canal donde esté invitado y confirmar que responde usando la base de conocimiento (no el echo viejo).
-3. **Probar la escalación a Monday.com disparada por Daniel en Slack** — pedirle a Daniel por Slack algo que no pueda resolver (ej. un bug inventado) y confirmar que aparece el ticket con los campos bien completados (esto ya probamos que la mutation en sí funciona; falta confirmar que el agente decide llamarla correctamente en una conversación real).
-4. **(Backlog, no bloqueante)** Tests básicos para `knowledge-base/`, `agent/` e `integrations/monday/`, y considerar clases de error custom — ver la auditoría arriba.
+Los 3 pasos de prueba end-to-end (askDaniel en vivo, Slack + agente en vivo, escalación a Monday desde Slack) ya se confirmaron en vivo el 2026-07-29 — ver detalle arriba. Queda:
+
+1. **(Backlog, no bloqueante)** Tests básicos para `knowledge-base/`, `agent/` e `integrations/monday/`, y considerar clases de error custom — ver la auditoría arriba.
+2. **Evaluar mover el bot a un VPS** — Socket Mode necesita estar conectado 24/7; depender de la red local de una máquina/laptop no escala para dejarlo corriendo de forma permanente. Pendiente: elegir VPS, definir proceso de deploy/secrets, y un process manager (`pm2`/`systemd`) para que se reinicie solo.
 
 ## Referencia rápida del stack
 
