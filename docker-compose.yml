@@ -1,0 +1,7 @@
+services:
+  daniel:
+    build:
+      context: /root/Daniel-Agent
+    env_file:
+      - /root/Daniel-Agent/.env
+    restart: unless-stopped

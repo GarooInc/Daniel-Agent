@@ -9,7 +9,7 @@
     "dev:slack": "tsx watch src/slack.ts",
     "dev:agent": "tsx src/agent-cli.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/slack.js"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
