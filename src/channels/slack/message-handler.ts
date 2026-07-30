@@ -22,9 +22,6 @@ export function registerMessageHandler(app: App, botUserId: string): void {
   app.message(async ({ message, say }) => {
     if (message.subtype) return;
     if (!("text" in message) || !message.text) return;
-
-    logger.info({ mentionTag, text: message.text, matched: message.text.includes(mentionTag) }, "DEBUG mención");
-
     if (!message.text.includes(mentionTag)) return;
 
     // Slack Events API puede reenviar el mismo mensaje si no se acusa recibo a tiempo
