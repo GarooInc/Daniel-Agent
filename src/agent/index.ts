@@ -1,1 +1,1 @@
-export { askDaniel } from "./daniel.js";
+export { askDaniel, UnresolvedConversationError } from "./daniel.js";
