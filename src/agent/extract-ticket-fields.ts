@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { MODEL } from "./model.js";
+import { URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "../integrations/monday/create-ticket.js";
 import type { TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import type { StoredMessage } from "../integrations/mongo/conversation-memory.js";
 
@@ -11,11 +12,11 @@ const ExtractionSchema = z.object({
   email: z.string().optional().describe("Email del cliente, solo si lo dijo explícitamente en la conversación"),
   resumen: z.string().optional().describe("Resumen breve y claro del problema o consulta, si se puede armar con lo que dijo"),
   urgencia: z
-    .enum(["No es urgente", "Urgente"])
+    .enum(URGENCIA_VALUES)
     .optional()
     .describe("Urgencia del caso, solo si se puede inferir con confianza de lo que dijo el cliente"),
-  tipoSolicitud: z.enum(["Problema", "Solicitud", "Pregunta"]).optional().describe("Tipo de solicitud, solo si es claro"),
-  producto: z.enum(["Isabella", "Sofi", "Widget-chatbot", "Otro"]).optional().describe("Producto de RedTec mencionado"),
+  tipoSolicitud: z.enum(TIPO_SOLICITUD_VALUES).optional().describe("Tipo de solicitud, solo si es claro"),
+  producto: z.enum(PRODUCTO_VALUES).optional().describe("Producto de RedTec mencionado"),
   queSeIntentoYa: z.string().optional().describe("Qué intentó el cliente para resolverlo antes, si lo mencionó"),
 });
 

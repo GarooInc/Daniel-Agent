@@ -1,9 +1,18 @@
 import { mondayRequest } from "./client.js";
 import { SUPPORT_BOARD_COLUMNS, SUPPORT_BOARD_ID } from "./board.js";
 
-export type UrgenciaTicket = "No es urgente" | "Urgente";
-export type TipoSolicitudTicket = "Problema" | "Solicitud" | "Pregunta";
-export type ProductoTicket = "Isabella" | "Sofi" | "Widget-chatbot" | "Otro";
+// Arrays en runtime (no solo tipos) para que agent/tools/escalate-to-monday.ts y
+// agent/extract-ticket-fields.ts puedan construir sus schemas de zod a partir de la misma
+// fuente, en vez de retipear los mismos literales en cada lugar.
+export const URGENCIA_VALUES = ["No es urgente", "Urgente"] as const;
+export type UrgenciaTicket = (typeof URGENCIA_VALUES)[number];
+
+export const TIPO_SOLICITUD_VALUES = ["Problema", "Solicitud", "Pregunta"] as const;
+export type TipoSolicitudTicket = (typeof TIPO_SOLICITUD_VALUES)[number];
+
+export const PRODUCTO_VALUES = ["Isabella", "Sofi", "Widget-chatbot", "Otro"] as const;
+export type ProductoTicket = (typeof PRODUCTO_VALUES)[number];
+
 export type CanalOrigen = "widget" | "whatsapp" | "instagram" | "messenger" | "telegram" | "default" | "slack";
 
 export type NuevoTicket = {

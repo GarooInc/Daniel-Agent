@@ -29,30 +29,21 @@ export async function escalateUnresolvedConversation(input: FailedConversation):
     logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo leer el perfil del cliente para la auto-escalación");
   }
 
-  try {
-    const ticketId = await createSupportTicket({
-      nombreCliente,
-      email,
-      resumen: input.textoOriginal,
-      urgencia: "Urgente",
-      tipoSolicitud: "Problema",
-      producto: "Otro",
-      canalOrigen: "slack",
-      queSeIntentoYa,
-    });
+  const ticket = {
+    nombreCliente,
+    email,
+    resumen: input.textoOriginal,
+    urgencia: "Urgente" as const,
+    tipoSolicitud: "Problema" as const,
+    producto: "Otro" as const,
+    queSeIntentoYa,
+  };
 
+  try {
+    const ticketId = await createSupportTicket({ ...ticket, canalOrigen: "slack" });
     logger.info({ ticketId }, "Ticket de auto-escalación creado en Monday.com tras una falla de Daniel");
 
-    notifyEscalation({
-      ticketId,
-      nombreCliente,
-      email,
-      resumen: input.textoOriginal,
-      urgencia: "Urgente",
-      tipoSolicitud: "Problema",
-      producto: "Otro",
-      queSeIntentoYa,
-    }).catch((error) => {
+    notifyEscalation({ ticketId, ...ticket }).catch((error) => {
       logger.warn({ err: error }, "No se pudo notificar el canal de escalación en Slack");
     });
 

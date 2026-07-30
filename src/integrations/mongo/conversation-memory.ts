@@ -23,9 +23,13 @@ const STORED_MESSAGES_CAP = 100;
 // no una fila por mensaje — el historial vive embebido como array dentro del documento.
 export async function getRecentMessages(slackUserId: string, limit = HISTORY_LIMIT): Promise<StoredMessage[]> {
   const db = await getDb();
-  const doc = await db.collection<ChatHistoryDoc>(COLLECTION).findOne({ slackUserId });
+  // $slice en la proyección: que Mongo devuelva solo los últimos `limit`, no los hasta
+  // STORED_MESSAGES_CAP guardados, para no traer y descartar en la app lo que no hace falta.
+  const doc = await db
+    .collection<ChatHistoryDoc>(COLLECTION)
+    .findOne({ slackUserId }, { projection: { messages: { $slice: -limit } } });
   if (!doc?.messages) return [];
-  return doc.messages.slice(-limit).map(({ role, content }) => ({ role, content }));
+  return doc.messages.map(({ role, content }) => ({ role, content }));
 }
 
 export async function appendMessage(slackUserId: string, role: ConversationRole, content: string): Promise<void> {
