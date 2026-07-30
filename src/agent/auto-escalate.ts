@@ -1,6 +1,8 @@
 import { createSupportTicket } from "../integrations/monday/index.js";
 import { notifyEscalation } from "../integrations/slack/notify-escalation.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
+import { clearHistory } from "../integrations/mongo/conversation-memory.js";
+import { clearTicketDraft } from "../integrations/mongo/ticket-draft.js";
 import { logger } from "../config/logger.js";
 
 export type FailedConversation = {
@@ -45,6 +47,12 @@ export async function escalateUnresolvedConversation(input: FailedConversation):
 
     notifyEscalation({ ticketId, ...ticket }).catch((error) => {
       logger.warn({ err: error }, "No se pudo notificar el canal de escalación en Slack");
+    });
+    clearTicketDraft(input.slackUserId).catch((error) => {
+      logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo limpiar el borrador del ticket tras la auto-escalación");
+    });
+    clearHistory(input.slackUserId).catch((error) => {
+      logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo limpiar el historial de chat tras la auto-escalación");
     });
 
     return ticketId;

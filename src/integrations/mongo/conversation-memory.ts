@@ -53,3 +53,14 @@ export async function appendMessage(slackUserId: string, role: ConversationRole,
     { upsert: true },
   );
 }
+
+// Se llama cuando un ticket se crea con éxito: el tema que traía ese historial ya quedó
+// resuelto/escalado, así que no debe seguir alimentando la extracción de datos ni el contexto
+// del modelo para el próximo mensaje del cliente. Bug real (2026-07-30): sin esto, dos pruebas
+// seguidas del mismo usuario dentro de la ventana de sesión (1h) hacían que extractTicketFields
+// releyera el intercambio de la escalación ya resuelta y contaminara un ticket nuevo, sobre un
+// tema distinto, con el resumen/producto de la conversación anterior.
+export async function clearHistory(slackUserId: string): Promise<void> {
+  const db = await getDb();
+  await db.collection<ChatHistoryDoc>(COLLECTION).deleteOne({ slackUserId });
+}

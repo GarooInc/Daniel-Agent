@@ -4,6 +4,7 @@ import { createSupportTicket } from "../../integrations/monday/index.js";
 import { URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "../../integrations/monday/create-ticket.js";
 import { notifyEscalation } from "../../integrations/slack/notify-escalation.js";
 import { saveCustomerProfile } from "../../integrations/mongo/customer-profile.js";
+import { clearHistory } from "../../integrations/mongo/conversation-memory.js";
 import { clearTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./ticket-fields.js";
 import { logger } from "../../config/logger.js";
@@ -44,6 +45,9 @@ export function createEscalateToMondayTool(slackUserId: string, effectiveDraft: 
         });
         clearTicketDraft(slackUserId).catch((error) => {
           logger.warn({ err: error, slackUserId }, "No se pudo limpiar el borrador del ticket");
+        });
+        clearHistory(slackUserId).catch((error) => {
+          logger.warn({ err: error, slackUserId }, "No se pudo limpiar el historial de chat tras la escalación");
         });
         notifyEscalation({ ticketId, ...ticket }).catch((error) => {
           logger.warn({ err: error, ticketId }, "No se pudo notificar el canal de escalación en Slack");
