@@ -13,7 +13,7 @@ export function getMissingEnvVars(): string[] {
 
 export const env = {
   openRouterApiKey: process.env.OPENROUTER_API_KEY,
-  openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-5-mini",
+  openRouterModel: process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-pro",
   slackAppToken: process.env.SLACK_APP_TOKEN,
   slackBotToken: process.env.SLACK_BOT_TOKEN,
   slackSigningSecret: process.env.SLACK_SIGNING_SECRET,
