@@ -4,6 +4,13 @@ import { logger } from "../../config/logger.js";
 
 const client = new WebClient(env.slackBotToken);
 
+// Slack no escapa esto por vos: si un cliente escribe "<https://evil.com|texto>" en su
+// mensaje y ese texto llega sin escapar a un campo mrkdwn, Slack lo renderiza como un link
+// clickeable real — un vector de phishing contra el equipo de soporte interno.
+function escapeMrkdwn(text: string): string {
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
 let cachedChannelId: string | undefined;
 
 async function resolveChannelId(): Promise<string | undefined> {
@@ -51,9 +58,14 @@ export async function notifyEscalation(notice: EscalationNotice): Promise<void> 
     return;
   }
 
+  const nombreCliente = escapeMrkdwn(notice.nombreCliente);
+  const email = escapeMrkdwn(notice.email);
+  const resumen = escapeMrkdwn(notice.resumen);
+  const queSeIntentoYa = escapeMrkdwn(notice.queSeIntentoYa);
+
   await client.chat.postMessage({
     channel: channelId,
-    text: `Nuevo ticket de soporte #${notice.ticketId} — ${notice.nombreCliente} (${notice.urgencia})`,
+    text: `Nuevo ticket de soporte #${notice.ticketId} — ${nombreCliente} (${notice.urgencia})`,
     blocks: [
       {
         type: "header",
@@ -62,19 +74,19 @@ export async function notifyEscalation(notice: EscalationNotice): Promise<void> 
       {
         type: "section",
         fields: [
-          { type: "mrkdwn", text: `*Cliente:*\n${notice.nombreCliente}` },
-          { type: "mrkdwn", text: `*Email:*\n${notice.email}` },
+          { type: "mrkdwn", text: `*Cliente:*\n${nombreCliente}` },
+          { type: "mrkdwn", text: `*Email:*\n${email}` },
           { type: "mrkdwn", text: `*Producto:*\n${notice.producto}` },
           { type: "mrkdwn", text: `*Tipo:*\n${notice.tipoSolicitud}` },
         ],
       },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*Resumen:*\n${notice.resumen}` },
+        text: { type: "mrkdwn", text: `*Resumen:*\n${resumen}` },
       },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*Qué se intentó:*\n${notice.queSeIntentoYa}` },
+        text: { type: "mrkdwn", text: `*Qué se intentó:*\n${queSeIntentoYa}` },
       },
       {
         type: "context",
