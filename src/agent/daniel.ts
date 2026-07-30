@@ -60,6 +60,10 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
   const history = isNewSession ? [] : historyRaw;
   const ticketDraft = isNewSession ? {} : ticketDraftRaw;
 
+  if (isNewSession) {
+    logger.info({ slackUserId, lastMessageAt: lastMessageAt?.toISOString() ?? null }, "Sesión nueva detectada — historial y borrador anteriores descartados");
+  }
+
   // Extracción automática de datos del ticket a partir de TODA la conversación — corre en
   // cada mensaje, sin depender de que el modelo principal decida llamar a escalar_a_monday
   // con los datos correctos. En paralelo con guardar el mensaje entrante y con limpiar el
