@@ -78,7 +78,7 @@ export function createEscalateToMondayTool(slackUserId: string) {
     {
       name: "escalar_a_monday",
       description:
-        "Crea un ticket de soporte en Monday.com cuando Daniel no puede resolver la consulta del cliente directamente. Se puede llamar con datos parciales en cualquier momento apenas el cliente los va dando — la herramienta recuerda lo que ya sabía de este ticket entre llamados y te dice qué falta, así no hace falta acumular todo vos mismo antes de llamarla. Cuando ya tenga todos los campos requeridos, crea el ticket de verdad.",
+        "Crea un ticket de soporte en Monday.com cuando Daniel no puede resolver la consulta del cliente directamente. Se puede llamar con datos parciales o incluso SIN argumentos — la herramienta ya tiene guardados los datos que se detectaron en la conversación y te dice qué falta si algo no está. Cuando ya tenga todos los campos requeridos, crea el ticket de verdad de inmediato.",
       schema: z.object({
         nombreCliente: z.string().optional().describe("Nombre del cliente, si ya lo dio"),
         email: z.string().optional().describe("Email del cliente, si ya lo dio"),

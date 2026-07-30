@@ -4,16 +4,15 @@ import { SYSTEM_PROMPT } from "./prompt.js";
 import { buildToolsByName } from "./tools/index.js";
 import { appendMessage, getRecentMessages, type StoredMessage } from "../integrations/mongo/conversation-memory.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
-import { getTicketDraft } from "../integrations/mongo/ticket-draft.js";
+import { getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields } from "./tools/ticket-fields.js";
+import { extractTicketFields } from "./extract-ticket-fields.js";
 
 const MAX_TOOL_ITERATIONS = 5;
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-// Extracción determinística por regex, en vez de confiar en que el modelo "recuerde"
-// bien un email mencionado varios turnos atrás — el LLM demostró en pruebas en vivo que
-// no siempre lo hace de forma confiable, incluso con el historial completo en contexto.
+// Respaldo barato y determinístico además de la extracción por LLM de abajo.
 function findMostRecentEmail(history: StoredMessage[], currentMessage: string): string | undefined {
   const candidates = [...history.filter((m) => m.role === "human").map((m) => m.content), currentMessage];
   for (let i = candidates.length - 1; i >= 0; i--) {
@@ -43,26 +42,41 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
   ]);
   await appendMessage(slackUserId, "human", userMessage);
 
-  const mentionedEmail = profile?.email ? undefined : findMostRecentEmail(history, userMessage);
-  const knownFacts: string[] = [];
-  if (profile?.nombreCliente) knownFacts.push(`nombre="${profile.nombreCliente}"`);
-  if (profile?.email) knownFacts.push(`email="${profile.email}"`);
-  if (mentionedEmail) knownFacts.push(`email="${mentionedEmail}" (lo mencionó en esta misma conversación)`);
+  // Extracción automática de datos del ticket a partir de TODA la conversación — corre en
+  // cada mensaje, sin depender de que el modelo principal decida llamar a escalar_a_monday
+  // con los datos correctos (en pruebas en vivo, ni gpt-5-mini ni deepseek-v4-pro lo hacían
+  // con la disciplina esperada). Esto persiste el borrador actualizado ANTES de generar la
+  // respuesta, así escalar_a_monday puede completarse aunque el modelo la llame sin argumentos.
+  const extracted = await extractTicketFields(history, userMessage);
+  const mentionedEmail = findMostRecentEmail(history, userMessage);
 
-  const profileNote =
-    knownFacts.length > 0 ? `\n\nDatos ya conocidos de este cliente — NO se los vuelvas a pedir: ${knownFacts.join(", ")}.` : "";
+  const effectiveDraft: TicketDraftFields = {
+    nombreCliente: extracted.nombreCliente ?? ticketDraft.nombreCliente ?? profile?.nombreCliente,
+    email: extracted.email ?? ticketDraft.email ?? mentionedEmail ?? profile?.email,
+    resumen: extracted.resumen ?? ticketDraft.resumen,
+    urgencia: extracted.urgencia ?? ticketDraft.urgencia,
+    tipoSolicitud: extracted.tipoSolicitud ?? ticketDraft.tipoSolicitud,
+    producto: extracted.producto ?? ticketDraft.producto,
+    queSeIntentoYa: extracted.queSeIntentoYa ?? ticketDraft.queSeIntentoYa,
+  };
+  await saveTicketDraftFields(slackUserId, effectiveDraft);
 
-  // Si ya hay un borrador de ticket en curso, es porque el cliente ya pidió escalar en algún
-  // mensaje anterior — hacerlo explícito acá evita que el modelo "se olvide" de esa decisión
-  // y vuelva a ofrecer troubleshooting desde cero (pasó en pruebas en vivo).
-  const draftFields = Object.entries(ticketDraft).filter(([, value]) => value !== undefined);
-  const escalationNote =
-    draftFields.length > 0
-      ? `\n\nYa se inició una escalación a soporte para este cliente en un mensaje anterior de esta misma conversación — NO le ofrezcas pasos de troubleshooting de nuevo ni le preguntes si quiere escalar, eso ya se decidió. Datos del ticket ya guardados: ${draftFields.map(([k, v]) => `${k}="${v}"`).join(", ")}. Todavía falta: ${findMissingFields(ticketDraft).length > 0 ? findMissingFields(ticketDraft).map((f) => FIELD_LABELS[f]).join(", ") : "nada — llamá a escalar_a_monday ahora mismo"}.`
+  const knownEntries = Object.entries(effectiveDraft).filter(([, value]) => value !== undefined);
+  const missing = findMissingFields(effectiveDraft);
+
+  const knownDataNote =
+    knownEntries.length > 0
+      ? `\n\nDatos ya conocidos de este cliente para un eventual ticket de soporte — NO se los vuelvas a pedir: ${knownEntries
+          .map(([k, v]) => `${k}="${v}"`)
+          .join(", ")}. ${
+          missing.length > 0
+            ? `Todavía falta (si hace falta escalar): ${missing.map((f) => FIELD_LABELS[f]).join(", ")}.`
+            : "Ya están todos los datos requeridos para un ticket — si corresponde escalar, llamá a escalar_a_monday ahora mismo (podés llamarla sin argumentos, ya los tiene guardados), no vuelvas a listarlos ni a pedir confirmación."
+        }`
       : "";
 
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
-    new SystemMessage(SYSTEM_PROMPT + profileNote + escalationNote),
+    new SystemMessage(SYSTEM_PROMPT + knownDataNote),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
     new HumanMessage(userMessage),
   ];
