@@ -13,7 +13,8 @@ export async function startSlackBot(): Promise<void> {
     socketMode: true,
   });
 
-  registerMessageHandler(app);
+  const auth = await app.client.auth.test();
+  registerMessageHandler(app, auth.user_id as string);
 
   const shutdown = async (signal: NodeJS.Signals) => {
     logger.info({ signal }, "Cerrando Daniel...");

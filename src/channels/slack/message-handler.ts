@@ -16,10 +16,13 @@ function alreadyProcessed(eventId: string): boolean {
   return false;
 }
 
-export function registerMessageHandler(app: App): void {
+export function registerMessageHandler(app: App, botUserId: string): void {
+  const mentionTag = `<@${botUserId}>`;
+
   app.message(async ({ message, say }) => {
     if (message.subtype) return;
     if (!("text" in message) || !message.text) return;
+    if (!message.text.includes(mentionTag)) return;
 
     // Slack Events API puede reenviar el mismo mensaje si no se acusa recibo a tiempo
     // (askDaniel + la tool de Monday pueden tardar más de los ~3s que Slack espera).
@@ -29,8 +32,10 @@ export function registerMessageHandler(app: App): void {
       return;
     }
 
+    const texto = message.text.replaceAll(mentionTag, "").trim();
+
     try {
-      const respuesta = await askDaniel(message.text);
+      const respuesta = await askDaniel(texto);
       await say(respuesta);
     } catch (error) {
       logger.error({ err: error }, "Error al consultar a Daniel");

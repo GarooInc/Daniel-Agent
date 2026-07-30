@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-07-29
+Última actualización: 2026-07-30
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -117,13 +117,14 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 Los 3 pasos de prueba end-to-end (askDaniel en vivo, Slack + agente en vivo, escalación a Monday desde Slack) ya se confirmaron en vivo el 2026-07-29 — ver detalle arriba. Queda:
 
 1. **(Backlog, no bloqueante)** Tests básicos para `knowledge-base/`, `agent/` e `integrations/monday/`, y considerar clases de error custom — ver la auditoría arriba.
-2. **Mover el bot a un VPS — EN CURSO (empezado 2026-07-29)**. Decisiones ya tomadas:
-   - **VPS**: Hostinger KVM 1, `srv853599.hstgr.cloud` / IP `82.29.180.111`, Frankfurt, usuario `root`. Docker ya viene instalado. **Es infraestructura compartida de RedTec**: ya corre ahí un proyecto Docker Compose llamado `traefik` (1 contenedor) y un firewall del panel de Hostinger llamado `RedTecAi-Capa1` (2 reglas) — o sea, este VPS probablemente aloja o va a alojar más de un bot de RedTec, no es exclusivo de Daniel. Tenerlo en cuenta antes de asumir puertos/redes libres al escribir el `docker-compose.yml` de Daniel (revisar si conviene unirse a la red de Traefik en vez de crear una aislada).
-   - **Deploy**: `git clone` del repo (privado, `GarooInc/Daniel-Agent`) directo en el VPS, usando una deploy key generada en el propio VPS (no la key personal de Jorge). `docker compose up -d --build` para levantarlo.
-   - **Secrets**: `.env` real se sube al VPS por `scp` desde la Mac de Jorge (no viaja por git, sigue en `.gitignore`), y Docker Compose lo lee vía `env_file`.
-   - **Auth SSH**: se agregó la public key de la Mac de Jorge (`~/.ssh/id_rsa.pub`) a `authorized_keys` del VPS vía la Terminal web del panel de Hostinger, para no pasar la contraseña root por el chat.
-   - **Bloqueado ahora mismo**: conexión SSH al puerto 22 da timeout (probado desde la Mac de Jorge y desde el propio Claude Code). Está en investigación si el firewall `RedTecAi-Capa1` del panel de Hostinger (Seguridad → Firewall) tiene o no una regla que permita el puerto 22, y si está activado o no. Si el firewall no es la causa, puede ser que el VPS (recién creado) todavía esté terminando de inicializar la red.
-   - **Todavía sin definir**: si se necesita un process manager adicional dentro del contenedor (Docker Compose con `restart: unless-stopped` puede ser suficiente y evitar `pm2`/`systemd` extra).
+2. **Mover el bot a un VPS — HECHO (2026-07-29/30)**. Daniel corre en producción en el VPS, desplegado con Coolify, y fue confirmado respondiendo en vivo en Slack (`@Daniel-Soporte`) el 2026-07-30.
+   - **VPS**: Hostinger KVM 1, `srv853599.hstgr.cloud` / IP `82.29.180.111`, Frankfurt, usuario `root`. Es infraestructura compartida de RedTec (varios bots podrían vivir aquí).
+   - **Cambio de approach**: se descartó tanto el plan original de `docker compose up -d` manual vía SSH como el Docker Manager nativo de Hostinger. En su lugar se **wipeó el VPS entero** (incluyendo el viejo proyecto Compose `traefik` y el firewall `RedTecAi-Capa1`) y se instaló **Coolify** como PaaS (`curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash`) para manejar builds, env vars y el reverse proxy de forma centralizada. Dashboard en `http://82.29.180.111:8000`.
+   - **Firewall**: se recreó desde cero un rule set en el panel de Hostinger llamado `GENERAL` (el `RedTecAi-Capa1` original quedó desactivado) con reglas Accept/TCP/Any para los puertos `22` (SSH), `80`, `443`, `8000` (dashboard Coolify), `6001-6002` (realtime de Coolify). Cada cambio de reglas requiere click en **Synchronize** para propagarse al servidor.
+   - **Gotcha de Hostinger encontrado**: el panel puede quedar en "Impersonate mode" (viendo la cuenta de otro usuario, ej. soporte) sin avisarlo claramente — en ese estado, cualquier edición de firewall falla con un toast "Unauthorized" que parece un bug de permisos pero es solo modo de solo-lectura. Se resuelve saliendo del banner naranja "Impersonate mode" y logueando con las credenciales reales del dueño.
+   - **Deploy real**: repo `GarooInc/Daniel-Agent` puesto en **público** en GitHub (decisión de Jorge, para saltarse deploy keys) y agregado en Coolify como Application → **Public Repository**, branch `main`, Build Pack **Dockerfile** (usa el `Dockerfile`/`.dockerignore` ya commiteados en el repo — build multi-stage con `node:24-alpine`, corre `dist/slack.js`). Healthcheck HTTP deshabilitado a propósito (Daniel no expone servidor HTTP, Slack corre en Socket Mode saliente). Las 5 credenciales reales (`OPENROUTER_API_KEY`, `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `MONDAY_API_TOKEN`) se cargaron directo en la pestaña Environment Variables de Coolify — no se subió ningún `.env` por scp.
+   - **Confirmado en vivo (2026-07-30)**: build y rolling update exitosos en Coolify, y respuesta real de Daniel en el canal de Slack al mensaje de prueba "Hola".
+   - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica en vez de `Any`, ahora que el setup está estable.
 
 ## Referencia rápida del stack
 
