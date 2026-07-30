@@ -125,6 +125,7 @@ Los 3 pasos de prueba end-to-end (askDaniel en vivo, Slack + agente en vivo, esc
    - **Deploy real**: repo `GarooInc/Daniel-Agent` puesto en **público** en GitHub (decisión de Jorge, para saltarse deploy keys) y agregado en Coolify como Application → **Public Repository**, branch `main`, Build Pack **Dockerfile** (usa el `Dockerfile`/`.dockerignore` ya commiteados en el repo — build multi-stage con `node:24-alpine`, corre `dist/slack.js`). Healthcheck HTTP deshabilitado a propósito (Daniel no expone servidor HTTP, Slack corre en Socket Mode saliente). Las 5 credenciales reales (`OPENROUTER_API_KEY`, `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `MONDAY_API_TOKEN`) se cargaron directo en la pestaña Environment Variables de Coolify — no se subió ningún `.env` por scp.
    - **Confirmado en vivo (2026-07-30)**: build y rolling update exitosos en Coolify, y respuesta real de Daniel en el canal de Slack al mensaje de prueba "Hola".
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica en vez de `Any`, ahora que el setup está estable.
+   - **Auto-deploy activado (2026-07-30)**: webhook de GitHub configurado apuntando a `http://82.29.180.111:8000/webhooks/source/github/events/manual` (Coolify → Configuration → Webhooks). Cada push a `main` dispara un deploy automático — ya no hace falta entrar al dashboard a darle Redeploy manual.
 
 ## Referencia rápida del stack
 
