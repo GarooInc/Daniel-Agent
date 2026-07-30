@@ -7,7 +7,7 @@ const client = new WebClient(env.slackBotToken);
 // Slack no escapa esto por vos: si un cliente escribe "<https://evil.com|texto>" en su
 // mensaje y ese texto llega sin escapar a un campo mrkdwn, Slack lo renderiza como un link
 // clickeable real — un vector de phishing contra el equipo de soporte interno.
-function escapeMrkdwn(text: string): string {
+export function escapeMrkdwn(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
