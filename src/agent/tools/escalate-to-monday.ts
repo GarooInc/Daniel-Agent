@@ -4,18 +4,8 @@ import { createSupportTicket } from "../../integrations/monday/index.js";
 import { notifyEscalation } from "../../integrations/slack/notify-escalation.js";
 import { getCustomerProfile, saveCustomerProfile } from "../../integrations/mongo/customer-profile.js";
 import { clearTicketDraft, getTicketDraft, saveTicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
+import { FIELD_LABELS, findMissingFields } from "./ticket-fields.js";
 import { logger } from "../../config/logger.js";
-
-const REQUIRED_FIELDS = ["nombreCliente", "email", "resumen", "urgencia", "tipoSolicitud", "producto"] as const;
-
-const FIELD_LABELS: Record<(typeof REQUIRED_FIELDS)[number], string> = {
-  nombreCliente: "nombre del cliente",
-  email: "email",
-  resumen: "resumen del problema",
-  urgencia: "urgencia (Urgente / No es urgente)",
-  tipoSolicitud: "tipo de solicitud (Problema / Solicitud / Pregunta)",
-  producto: "producto (Isabella / Sofi / Widget-chatbot / Otro)",
-};
 
 // Factory en vez de tool estática: necesita el slackUserId de quien escribe para acumular
 // el borrador del ticket y el perfil del cliente entre llamados. Se puede llamar con datos
@@ -37,7 +27,7 @@ export function createEscalateToMondayTool(slackUserId: string) {
           queSeIntentoYa: args.queSeIntentoYa ?? draft.queSeIntentoYa,
         };
 
-        const missing = REQUIRED_FIELDS.filter((field) => !merged[field]);
+        const missing = findMissingFields(merged);
 
         if (missing.length > 0) {
           await saveTicketDraftFields(slackUserId, merged);

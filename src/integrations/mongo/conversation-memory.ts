@@ -7,27 +7,35 @@ export type StoredMessage = {
   content: string;
 };
 
-type ConversationDoc = StoredMessage & { slackUserId: string; createdAt: Date };
+type ChatHistoryDoc = {
+  slackUserId: string;
+  messages: (StoredMessage & { createdAt: Date })[];
+  updatedAt: Date;
+};
 
 const COLLECTION = "chat_histories";
 const HISTORY_LIMIT = 15;
+// Tope duro del array guardado en Mongo (más holgado que lo que realmente se manda al
+// modelo) para no dejar crecer el documento sin límite, sin perder margen para el futuro.
+const STORED_MESSAGES_CAP = 100;
 
-// Memoria tipo "buffer window" (igual a la memoria simple de n8n): últimos N mensajes
-// por usuario de Slack, sin importar cuánto tiempo pasó desde el último. No usa
-// embeddings/búsqueda semántica — para v1 alcanza con recencia, no con similitud.
+// Un solo documento por usuario de Slack (igual al patrón del nodo de memoria de n8n),
+// no una fila por mensaje — el historial vive embebido como array dentro del documento.
 export async function getRecentMessages(slackUserId: string, limit = HISTORY_LIMIT): Promise<StoredMessage[]> {
   const db = await getDb();
-  const docs = await db
-    .collection<ConversationDoc>(COLLECTION)
-    .find({ slackUserId })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .toArray();
-
-  return docs.reverse().map(({ role, content }) => ({ role, content }));
+  const doc = await db.collection<ChatHistoryDoc>(COLLECTION).findOne({ slackUserId });
+  if (!doc?.messages) return [];
+  return doc.messages.slice(-limit).map(({ role, content }) => ({ role, content }));
 }
 
 export async function appendMessage(slackUserId: string, role: ConversationRole, content: string): Promise<void> {
   const db = await getDb();
-  await db.collection<ConversationDoc>(COLLECTION).insertOne({ slackUserId, role, content, createdAt: new Date() });
+  await db.collection<ChatHistoryDoc>(COLLECTION).updateOne(
+    { slackUserId },
+    {
+      $push: { messages: { $each: [{ role, content, createdAt: new Date() }], $slice: -STORED_MESSAGES_CAP } },
+      $set: { updatedAt: new Date() },
+    },
+    { upsert: true },
+  );
 }

@@ -4,6 +4,8 @@ import { SYSTEM_PROMPT } from "./prompt.js";
 import { buildToolsByName } from "./tools/index.js";
 import { appendMessage, getRecentMessages, type StoredMessage } from "../integrations/mongo/conversation-memory.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
+import { getTicketDraft } from "../integrations/mongo/ticket-draft.js";
+import { FIELD_LABELS, findMissingFields } from "./tools/ticket-fields.js";
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -34,7 +36,11 @@ export class UnresolvedConversationError extends Error {
 export async function askDaniel(userMessage: string, slackUserId: string): Promise<string> {
   const model = buildModel();
   const toolsByName = buildToolsByName(slackUserId);
-  const [history, profile] = await Promise.all([getRecentMessages(slackUserId), getCustomerProfile(slackUserId)]);
+  const [history, profile, ticketDraft] = await Promise.all([
+    getRecentMessages(slackUserId),
+    getCustomerProfile(slackUserId),
+    getTicketDraft(slackUserId),
+  ]);
   await appendMessage(slackUserId, "human", userMessage);
 
   const mentionedEmail = profile?.email ? undefined : findMostRecentEmail(history, userMessage);
@@ -46,8 +52,17 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
   const profileNote =
     knownFacts.length > 0 ? `\n\nDatos ya conocidos de este cliente — NO se los vuelvas a pedir: ${knownFacts.join(", ")}.` : "";
 
+  // Si ya hay un borrador de ticket en curso, es porque el cliente ya pidió escalar en algún
+  // mensaje anterior — hacerlo explícito acá evita que el modelo "se olvide" de esa decisión
+  // y vuelva a ofrecer troubleshooting desde cero (pasó en pruebas en vivo).
+  const draftFields = Object.entries(ticketDraft).filter(([, value]) => value !== undefined);
+  const escalationNote =
+    draftFields.length > 0
+      ? `\n\nYa se inició una escalación a soporte para este cliente en un mensaje anterior de esta misma conversación — NO le ofrezcas pasos de troubleshooting de nuevo ni le preguntes si quiere escalar, eso ya se decidió. Datos del ticket ya guardados: ${draftFields.map(([k, v]) => `${k}="${v}"`).join(", ")}. Todavía falta: ${findMissingFields(ticketDraft).length > 0 ? findMissingFields(ticketDraft).map((f) => FIELD_LABELS[f]).join(", ") : "nada — llamá a escalar_a_monday ahora mismo"}.`
+      : "";
+
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
-    new SystemMessage(SYSTEM_PROMPT + profileNote),
+    new SystemMessage(SYSTEM_PROMPT + profileNote + escalationNote),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
     new HumanMessage(userMessage),
   ];
