@@ -32,6 +32,16 @@ export async function getRecentMessages(slackUserId: string, limit = HISTORY_LIM
   return doc.messages.map(({ role, content }) => ({ role, content }));
 }
 
+// Timestamp del último mensaje de este cliente, sin importar el contenido — se usa para
+// decidir si esta conversación es una continuación o una sesión nueva (ver daniel.ts).
+export async function getLastMessageAt(slackUserId: string): Promise<Date | undefined> {
+  const db = await getDb();
+  const doc = await db
+    .collection<ChatHistoryDoc>(COLLECTION)
+    .findOne({ slackUserId }, { projection: { messages: { $slice: -1 } } });
+  return doc?.messages?.[0]?.createdAt;
+}
+
 export async function appendMessage(slackUserId: string, role: ConversationRole, content: string): Promise<void> {
   const db = await getDb();
   await db.collection<ChatHistoryDoc>(COLLECTION).updateOne(
