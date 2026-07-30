@@ -1,4 +1,4 @@
-import { mondayRequest } from "./client.js";
+import { mondayRequest, MondayApiError } from "./client.js";
 import { SUPPORT_BOARD_COLUMNS, SUPPORT_BOARD_ID } from "./board.js";
 
 // Arrays en runtime (no solo tipos) para que agent/tools/escalate-to-monday.ts y
@@ -56,7 +56,7 @@ export async function createSupportTicket(ticket: NuevoTicket): Promise<string> 
   });
 
   if (!data.create_item) {
-    throw new Error("Monday no devolvió el item creado.");
+    throw new MondayApiError("Monday no devolvió el item creado.");
   }
 
   return data.create_item.id;
