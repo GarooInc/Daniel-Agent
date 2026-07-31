@@ -26,6 +26,7 @@ import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./agent/tool
 import { searchFaqsTool } from "./agent/tools/search-faqs.js";
 import { lookupCustomerTool } from "./agent/tools/lookup-customer.js";
 import { createSupportTicket, URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "./integrations/monday/create-ticket.js";
+import { notifyEscalation } from "./integrations/slack/notify-escalation.js";
 import { mondayRequest } from "./integrations/monday/client.js";
 import type { TicketDraftFields } from "./integrations/mongo/ticket-draft.js";
 import type { StoredMessage } from "./integrations/mongo/conversation-memory.js";
@@ -124,6 +125,8 @@ function buildEscalarTool(uid: string, effectiveDraft: TicketDraftFields, onTick
 
       const ticketId = await createSupportTicket(ticket);
       lastCreatedTicketId = ticketId;
+
+      notifyEscalation({ ticketId, ...ticket }).catch(() => {});
 
       store.saveProfile(uid, { nombreCliente: ticket.nombreCliente, email: ticket.email });
       store.clearTicketDraft(uid);

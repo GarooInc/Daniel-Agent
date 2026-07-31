@@ -13,6 +13,10 @@ export function escapeMrkdwn(text: string): string {
 
 let cachedChannelId: string | undefined;
 
+export function _resetCachedChannelIdForTests(): void {
+  cachedChannelId = undefined;
+}
+
 async function resolveChannelId(): Promise<string | undefined> {
   if (cachedChannelId) return cachedChannelId;
 
