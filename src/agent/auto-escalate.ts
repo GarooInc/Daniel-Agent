@@ -2,7 +2,8 @@ import { createSupportTicket } from "../integrations/monday/index.js";
 import { notifyEscalation } from "../integrations/slack/notify-escalation.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
 import { clearHistory } from "../integrations/mongo/conversation-memory.js";
-import { clearTicketDraft } from "../integrations/mongo/ticket-draft.js";
+import { clearTicketDraft, getTicketDraft } from "../integrations/mongo/ticket-draft.js";
+import { mergeTicketFields } from "./tools/ticket-fields.js";
 import { logger } from "../config/logger.js";
 
 export type FailedConversation = {
@@ -18,26 +19,38 @@ export type FailedConversation = {
 export async function escalateUnresolvedConversation(input: FailedConversation): Promise<string | undefined> {
   const queSeIntentoYa = `Daniel no pudo responder automáticamente: ${input.motivo}`;
 
-  // Si ya conocíamos a este cliente de una escalación anterior, usamos esos datos reales
-  // en vez de "no proporcionado" — pero si Mongo es justo la causa de la falla, no dejamos
-  // que este lookup también rompa la escalación.
-  let nombreCliente = input.nombreClienteFallback;
-  let email = "No proporcionado (la conversación falló antes de poder pedirlo)";
+  // Intentamos enriquecer la escalación con los datos reales que se acumularon durante la
+  // conversación (ticket_draft + perfil), antes de caer a los valores genéricos de fallback.
+  // Si Mongo es la causa del fallo, ninguno de estos lookups debe romper la escalación.
+  let profileNombre = input.nombreClienteFallback;
+  let profileEmail = "No proporcionado (la conversación falló antes de poder pedirlo)";
   try {
     const profile = await getCustomerProfile(input.slackUserId);
-    if (profile?.nombreCliente) nombreCliente = profile.nombreCliente;
-    if (profile?.email) email = profile.email;
+    if (profile?.nombreCliente) profileNombre = profile.nombreCliente;
+    if (profile?.email) profileEmail = profile.email;
   } catch (error) {
     logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo leer el perfil del cliente para la auto-escalación");
   }
 
+  // El ticket_draft tiene los campos que extractTicketFields fue acumulando en cada mensaje
+  // (producto, resumen, urgencia, etc.) — mucho más útil que los valores fijos genéricos.
+  let draft = {};
+  try {
+    draft = await getTicketDraft(input.slackUserId);
+  } catch (error) {
+    logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo leer el borrador del ticket para la auto-escalación");
+  }
+
+  // Prioridad: draft (datos reales de la conversación) > perfil guardado > fallbacks genéricos.
+  const merged = mergeTicketFields(draft, { nombreCliente: profileNombre, email: profileEmail });
+
   const ticket = {
-    nombreCliente,
-    email,
-    resumen: input.textoOriginal,
-    urgencia: "Urgente" as const,
-    tipoSolicitud: "Problema" as const,
-    producto: "Otro" as const,
+    nombreCliente: merged.nombreCliente ?? profileNombre,
+    email: merged.email ?? profileEmail,
+    resumen: merged.resumen ?? input.textoOriginal,
+    urgencia: merged.urgencia ?? ("Urgente" as const),
+    tipoSolicitud: merged.tipoSolicitud ?? ("Problema" as const),
+    producto: merged.producto ?? ("Otro" as const),
     queSeIntentoYa,
   };
 
