@@ -10,7 +10,8 @@
     "dev:agent": "tsx src/agent-cli.ts",
     "build": "tsc",
     "start": "node dist/slack.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "tsx src/test-e2e.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
