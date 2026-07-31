@@ -100,7 +100,7 @@ function buildKnownDataNote(draft: TicketDraftFields): string {
 // ─── Tool escalar_a_monday con in-memory store ────────────────────────────────
 let lastCreatedTicketId: string | undefined;
 
-function buildEscalarTool(uid: string, effectiveDraft: TicketDraftFields) {
+function buildEscalarTool(uid: string, effectiveDraft: TicketDraftFields, onTicketCreated?: () => void) {
   return tool(
     async (args) => {
       const merged = mergeTicketFields(args, effectiveDraft);
@@ -127,7 +127,11 @@ function buildEscalarTool(uid: string, effectiveDraft: TicketDraftFields) {
 
       store.saveProfile(uid, { nombreCliente: ticket.nombreCliente, email: ticket.email });
       store.clearTicketDraft(uid);
-      store.clearHistory(uid);
+      if (onTicketCreated) {
+        onTicketCreated();
+      } else {
+        store.clearHistory(uid);
+      }
 
       return `Ticket creado en Monday.com con id ${ticketId}.`;
     },
@@ -168,10 +172,13 @@ async function askDanielE2E(userMessage: string, uid: string): Promise<string> {
   const effectiveDraft = mergeTicketFields(extracted, draftPrev, profile ?? {});
   store.saveTicketDraft(uid, effectiveDraft);
 
-  const toolsByName: Record<string, ReturnType<typeof tool>> = {
+  let ticketCreated = false;
+  const toolsByName: Record<string, any> = {
     buscar_faqs: searchFaqsTool,
     buscar_cliente: lookupCustomerTool,
-    escalar_a_monday: buildEscalarTool(uid, effectiveDraft),
+    escalar_a_monday: buildEscalarTool(uid, effectiveDraft, () => {
+      ticketCreated = true;
+    }),
   };
 
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
@@ -187,6 +194,9 @@ async function askDanielE2E(userMessage: string, uid: string): Promise<string> {
     if (!response.tool_calls || response.tool_calls.length === 0) {
       const text = typeof response.content === "string" ? response.content : JSON.stringify(response.content);
       store.appendMessage(uid, "ai", text);
+      if (ticketCreated) {
+        store.clearHistory(uid);
+      }
       return text;
     }
 

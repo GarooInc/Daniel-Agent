@@ -13,7 +13,11 @@ import { logger } from "../../config/logger.js";
 // y el borrador ya calculado por daniel.ts para esta conversación (evita repetir el mismo
 // fetch+merge de Mongo que daniel.ts ya hizo momentos antes). Se puede llamar con datos
 // parciales o sin argumentos en cualquier momento — si algo falta, lo dice y lo recuerda.
-export function createEscalateToMondayTool(slackUserId: string, effectiveDraft: TicketDraftFields) {
+export function createEscalateToMondayTool(
+  slackUserId: string,
+  effectiveDraft: TicketDraftFields,
+  onTicketCreated?: () => void,
+) {
   return tool(
     async (args) => {
       try {
@@ -46,9 +50,13 @@ export function createEscalateToMondayTool(slackUserId: string, effectiveDraft: 
         clearTicketDraft(slackUserId).catch((error) => {
           logger.warn({ err: error, slackUserId }, "No se pudo limpiar el borrador del ticket");
         });
-        clearHistory(slackUserId).catch((error) => {
-          logger.warn({ err: error, slackUserId }, "No se pudo limpiar el historial de chat tras la escalación");
-        });
+        if (onTicketCreated) {
+          onTicketCreated();
+        } else {
+          clearHistory(slackUserId).catch((error) => {
+            logger.warn({ err: error, slackUserId }, "No se pudo limpiar el historial de chat tras la escalación");
+          });
+        }
         notifyEscalation({ ticketId, ...ticket }).catch((error) => {
           logger.warn({ err: error, ticketId }, "No se pudo notificar el canal de escalación en Slack");
         });

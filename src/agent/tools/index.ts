@@ -5,8 +5,12 @@ import type { TicketDraftFields } from "../../integrations/mongo/ticket-draft.js
 
 // escalar_a_monday se arma por sesión porque necesita el slackUserId de quien escribe y el
 // borrador ya calculado por daniel.ts para esta conversación — las demás tools son sin estado.
-export function buildToolsByName(slackUserId: string, effectiveDraft: TicketDraftFields): Record<string, any> {
-  const tools = [searchFaqsTool, lookupCustomerTool, createEscalateToMondayTool(slackUserId, effectiveDraft)];
+export function buildToolsByName(
+  slackUserId: string,
+  effectiveDraft: TicketDraftFields,
+  onTicketCreated?: () => void,
+): Record<string, any> {
+  const tools = [searchFaqsTool, lookupCustomerTool, createEscalateToMondayTool(slackUserId, effectiveDraft, onTicketCreated)];
   return Object.fromEntries(tools.map((t) => [t.name, t]));
 }
 

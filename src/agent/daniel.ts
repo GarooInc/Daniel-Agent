@@ -2,7 +2,7 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 import { buildModel } from "./model.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { buildToolsByName } from "./tools/index.js";
-import { appendMessage, getLastMessageAt, getRecentMessages } from "../integrations/mongo/conversation-memory.js";
+import { appendMessage, clearHistory, getLastMessageAt, getRecentMessages } from "../integrations/mongo/conversation-memory.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
 import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
@@ -81,7 +81,10 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
   const effectiveDraft = mergeTicketFields(extracted, ticketDraft, profile ?? {});
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
-  const toolsByName = buildToolsByName(slackUserId, effectiveDraft);
+  let ticketCreated = false;
+  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, () => {
+    ticketCreated = true;
+  });
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(SYSTEM_PROMPT + buildKnownDataNote(effectiveDraft)),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
@@ -95,6 +98,11 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
     if (!response.tool_calls || response.tool_calls.length === 0) {
       const respuesta = typeof response.content === "string" ? response.content : JSON.stringify(response.content);
       await appendMessage(slackUserId, "ai", respuesta);
+      if (ticketCreated) {
+        await clearHistory(slackUserId).catch((error) => {
+          logger.warn({ err: error, slackUserId }, "No se pudo limpiar el historial de chat tras la escalación");
+        });
+      }
       return respuesta;
     }
 
