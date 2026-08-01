@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-07-31 (sesión tarde)
+Última actualización: 2026-07-31 (sesión noche)
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -131,34 +131,40 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 - [x] **Fix: `clearHistory` diferido tras respuesta final y reintento de conexión en `client.ts` (2026-07-31)**:
   - **Historial limpio (9/9 checks E2E)**: Se corrigió el orden de limpieza. `clearHistory` ahora se ejecuta *después* de guardar la respuesta final de la IA en `chat_histories`, asegurando que `chat_histories` quede en 0 mensajes tras una escalación exitosa.
   - **Reintento de conexión MongoDB**: `client.ts` ahora resetea `dbPromise = undefined` en el `catch` si falla la conexión inicial o la creación de índices, permitiendo reintentar la conexión en llamadas posteriores si hubo una falla de red o DNS temporal.
+- [~] **Retest en vivo en Slack (2026-07-31, sesión noche): ticket creado en Monday, pero el aviso a `#escalacion` sigue sin llegar.** Ana López (cliente de prueba) escaló un caso urgente por Slack; Daniel creó el ticket real en Monday (id `3130442122`) sin problema. La notificación a `#escalacion` (`notify-escalation.ts`) no llegó — mismo síntoma que la sesión anterior, ya sin resolver.
+  - **Descartado como causa**: el nombre del canal. Jorge confirmó que el canal se llama exactamente `escalacion` (coincide con el default de `SLACK_ESCALATION_CHANNEL` en `env.ts`).
+  - **Intentado y no resolvió nada**: reinstalar la app en api.slack.com y actualizar el `SLACK_BOT_TOKEN` en Coolify con el token nuevo. Esto solo regenera el token — **no agrega scopes que no estuvieran ya en la lista de OAuth & Permissions**, así que si la causa es un `missing_scope`, reinstalar sin tocar los scopes no cambia nada.
+  - **Diagnóstico narrowed down, esperando 3 datos de Jorge para confirmar cuál de las tres es**:
+    1. El log exacto en Coolify de la línea `"No se pudo notificar el canal de escalación en Slack"` para el ticket `3130442122` (trae el código de error real de la API de Slack: `missing_scope`, `not_in_channel`, `channel_not_found`, etc. — el error se atrapa con `.catch()` en `escalate-to-monday.ts`/`auto-escalate.ts`, así que nunca crashea, solo queda logueado como warning).
+    2. La lista actual de **Bot Token Scopes** en OAuth & Permissions — necesita como mínimo `channels:read`, `groups:read`, `chat:write`, y `chat:write.public` si `escalacion` es público y el bot no está invitado.
+    3. Confirmar que `@Daniel-Soporte` esté invitado al canal `escalacion` (`/invite @Daniel-Soporte` si no lo está) — sin esto, `chat.postMessage` puede fallar con `not_in_channel` aunque los scopes estén bien.
 
 **Nota de red de esta máquina**: el fetch nativo de Node (`undici`) tiene timeouts intermitentes (`ETIMEDOUT`) contra hosts externos (pasó con `registry.npmjs.org`, `api.monday.com` y hasta `openrouter.ai`) que `curl` no sufre — parece un problema de resolución/preferencia IPv6 en esta máquina. Si el bot corriendo en otra máquina tiene llamadas que cuelgan o tardan mucho, probar arrancándolo con `NODE_OPTIONS="--dns-result-order=ipv4first" npm run dev:slack` antes de asumir que es un bug de la app.
 
 **Conector MCP de Monday.com disponible (sin usar todavía)**: apareció un conector `claude.ai monday.com` (requiere autenticar corriendo `/mcp` y eligiéndolo de la lista) que no existía cuando se definió el stack original. La integración ya construida (`src/integrations/monday/`) usa la API GraphQL directa y está probada — el MCP no la reemplazó, pero queda como opción para inspeccionar el tablero interactivamente sin escribir queries a mano.
 ## Pendientes / próximos pasos (en orden)
 
-0. **(Próximo paso, bloqueante #1) Diagnosticar y arreglar MongoDB en producción (Coolify) — causa raíz de la amnesia del agente.**
-   - **Síntoma observado (prueba en vivo 2026-07-31)**: Daniel no recuerda nada entre mensajes del mismo usuario. Turno 2 no conoce lo dicho en Turno 1. Turno 3 tampoco. El modelo arranca en blanco cada vez.
-   - **Causa confirmada**: el código local (test E2E con in-memory store) funciona perfectamente — Daniel recordó el nombre en Turno 2 sin repreguntarlo, escaló con el producto correcto, etc. El problema es exclusivamente de infraestructura: MongoDB Atlas no está recibiendo/devolviendo datos en el bot de producción corriendo en Coolify.
-   - **Hipótesis más probable**: `MONGODB_URI` no está seteada correctamente en Coolify (variable inexistente o con typo), haciendo que `client.ts` conecte con string vacío `""`. El MongoClient no tira error en el constructor — falla silenciosamente cuando se intenta usar. Como `getRecentMessages` no tiene try/catch propio y tira dentro de un `Promise.all` en `daniel.ts`, si Mongo falla lanza una excepción que va al catch de `message-handler.ts` → auto-escalación. Pero se observaron respuestas normales (no auto-escalación), así que quizás el MongoClient está conectando a algún host por default y devolviendo vacío.
-   - **Cómo verificar**: entrar a Coolify → Application → Environment Variables y confirmar que `MONGODB_URI` existe con exactamente ese nombre y contiene el connection string de Atlas (`mongodb+srv://...`). También revisar los logs de Coolify del período 12:57–13:00 del 2026-07-31 para buscar cualquier warn/error de MongoDB.
+0. **(Bloqueante #1, en curso) Diagnosticar por qué el aviso a `#escalacion` no llega, aunque el ticket sí se crea en Monday.**
+   - Confirmado en la última prueba en vivo (2026-07-31): ticket `3130442122` creado correctamente en Monday, pero cero aviso en `#escalacion`. Ya se descartó el nombre del canal (es `escalacion`, coincide con el código) y reinstalar la app de Slack + token nuevo en Coolify **no lo arregló**.
+   - **Esperando 3 datos de Jorge para cerrarlo** (ver detalle en "Estado actual" arriba):
+     1. El log de Coolify con el error real de Slack para el ticket `3130442122` (`missing_scope` / `not_in_channel` / `channel_not_found`, etc.)
+     2. La lista de **Bot Token Scopes** actual en OAuth & Permissions (necesita `channels:read`, `groups:read`, `chat:write`, y `chat:write.public` si el canal es público y el bot no está invitado).
+     3. Confirmar que `@Daniel-Soporte` esté invitado al canal `escalacion`.
+   - **Hipótesis más probable dado que reinstalar el token no ayudó**: falta un scope que nunca se agregó a la lista de OAuth & Permissions (reinstalar solo regenera el token con los scopes que ya estaban, no agrega nuevos).
 
-1. **Reprobar en vivo el flujo completo con MongoDB funcionando** — el test E2E pasó 9/9 localmente con in-memory store. Una vez que se confirme MongoDB en Coolify, repetir el guión de 4 turnos en Slack y verificar:
+1. **Diagnosticar y confirmar MongoDB en producción (Coolify) — causa raíz original de la amnesia del agente, todavía sin cerrar del todo.**
+   - **Síntoma observado (prueba en vivo 2026-07-31, sesión tarde)**: Daniel no recordaba nada entre mensajes del mismo usuario. El código local (test E2E con in-memory store) funciona perfectamente, así que el problema era de infraestructura, no de lógica.
+   - **En curso (sesión noche 2026-07-31)**: se pidió a Jorge revisar directo en MongoDB (vía terminal/mongosh) qué hay ahora mismo en `chat_histories`/`ticket_drafts`/`users`, para determinar si los mensajes no se están guardando o si se están borrando por algún motivo — **resultado todavía no reportado**.
+   - Nota: el ticket `3130442122` de la prueba más reciente sí se creó con el flujo normal (no fue una auto-escalación por error), lo cual es una señal indirecta de que el agente venía funcionando en ese turno — pero no reemplaza confirmar el estado real de las 3 colecciones en Mongo.
+   - **Cómo verificar si hace falta repetir**: entrar a Coolify → Application → Environment Variables y confirmar que `MONGODB_URI` existe con exactamente ese nombre y contiene el connection string de Atlas (`mongodb+srv://...`). También revisar los logs de Coolify buscando cualquier warn/error de MongoDB.
+
+2. **Reprobar en vivo el flujo completo una vez que MongoDB y el aviso a `#escalacion` estén confirmados** — el test E2E pasó 9/9 localmente con in-memory store. Repetir el guión de varios turnos en Slack y verificar:
    - (a) ticket con producto/resumen/email reales (no genéricos)
    - (b) no repregunta datos ya dados
-   - (c) aviso en `#escalacion` llega (todavía sin confirmar)
+   - (c) aviso en `#escalacion` llega (todavía sin confirmar — ver punto 0)
    - (d) perfil guardado en `users` para la próxima sesión
 
-2. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
-   - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
-
-1. **Reprobar en vivo el flujo completo con MongoDB funcionando** — el test E2E pasó 8/9 localmente con in-memory store. Una vez que se confirme MongoDB en Coolify, repetir el guión de 4 turnos en Slack y verificar:
-   - (a) ticket con producto/resumen/email reales (no genéricos)
-   - (b) no repregunta datos ya dados
-   - (c) aviso en `#escalacion` llega (todavía sin confirmar)
-   - (d) perfil guardado en `users` para la próxima sesión
-
-2. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
+3. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
 ## Referencia rápida del stack
