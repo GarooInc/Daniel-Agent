@@ -5,6 +5,7 @@ export const REQUIRED_ENV_VARS = [
   "SLACK_SIGNING_SECRET",
   "MONDAY_API_TOKEN",
   "MONGODB_URI",
+  "REDIS_URL",
 ] as const;
 
 export function getMissingEnvVars(): string[] {
@@ -20,4 +21,5 @@ export const env = {
   mondayApiToken: process.env.MONDAY_API_TOKEN,
   mongodbUri: process.env.MONGODB_URI,
   mongodbDbName: process.env.MONGODB_DB_NAME || "daniel",
+  redisUrl: process.env.REDIS_URL,
 };
