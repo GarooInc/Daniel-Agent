@@ -1,7 +1,9 @@
 import bolt from "@slack/bolt";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
-import { registerMessageHandler } from "./message-handler.js";
+import { registerMessageHandler, handleResolvedMessage } from "./message-handler.js";
+import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
+import { closeRedis } from "../../integrations/redis/client.js";
 
 const { App } = bolt;
 
@@ -16,8 +18,16 @@ export async function startSlackBot(): Promise<void> {
   const auth = await app.client.auth.test();
   registerMessageHandler(app, auth.user_id as string);
 
+  const worker = startDebounceWorker(async (_source, slackUserId, channelId, texto) => {
+    await handleResolvedMessage(app.client, slackUserId, texto, (text) =>
+      app.client.chat.postMessage({ channel: channelId, text }),
+    );
+  });
+
   const shutdown = async (signal: NodeJS.Signals) => {
     logger.info({ signal }, "Cerrando Daniel...");
+    await closeDebounceQueue(worker);
+    await closeRedis();
     await app.stop();
     process.exit(0);
   };

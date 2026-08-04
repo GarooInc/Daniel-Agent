@@ -152,30 +152,34 @@ Decisión de Jorge (2026-08-03): la KB va a vivir vectorizada en MongoDB Atlas, 
 - En Coolify → proyecto `daniel-agent` → recurso `Redis` → pestaña de configuración → copiar la **Internal Connection String**.
 - Agregarla en Coolify, en la app `daniel--agent`, Environment Variables, como `REDIS_URL`.
 
-### Paso 1 — Groundwork de código (YA HECHO, sin commitear todavía)
-- `package.json`: agregadas dependencias `ioredis` y `bullmq`.
+### Paso 1 — Groundwork de código (HECHO, commiteado)
+- `package.json`: agregadas dependencias `ioredis` y `bullmq`. `npm install` corrido (32s, 15 paquetes, 0 vulnerabilidades) — el `ETIMEDOUT` intermitente contra `registry.npmjs.org` de esta máquina apareció en el primer intento y se resolvió reintentando sin cambios.
 - `src/config/env.ts`: `REDIS_URL` agregado a `REQUIRED_ENV_VARS` y a `env.redisUrl`.
 - `src/integrations/redis/client.ts`: conexión lazy a Redis (`getRedis()`), mismo patrón que `integrations/mongo/client.ts`, más `getRedisConnectionOptions()` (BullMQ necesita `maxRetriesPerRequest: null`) y `closeRedis()`.
-- Falta: `npm install` (para bajar `ioredis`/`bullmq` a `node_modules`), y actualizar `.env.example` con `REDIS_URL`.
+- `.env.example` actualizado con `REDIS_URL`.
 
-### Paso 2 — Módulo de debounce/cola (`src/messaging/debounce-queue.ts`, no creado todavía)
-Diseño acordado (channel-agnostic, para que Slack y WhatsApp compartan la misma lógica):
-- `bufferMessage(source, userId, conversationId, text)`:
+### Paso 2 — Módulo de debounce/cola (HECHO, `src/messaging/debounce-queue.ts`, 2026-08-03/04)
+Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lógica:
+- `bufferMessage(source, userId, conversationId, texto)`:
   - `RPUSH` del texto a una lista Redis `buffer:{source}:{userId}`.
-  - Busca el job delayed existente en una cola BullMQ (`jobId = "{source}:{userId}"`); si existe y sigue `delayed`, lo remueve.
-  - Vuelve a agregar el job con los mismos `jobId`, delay fijo (proponer `DEBOUNCE_MS = 4000`ms) y payload `{source, userId, conversationId}` — esto reinicia la ventana de espera cada vez que llega un mensaje nuevo del mismo usuario, y de paso actualiza el `conversationId` por si cambió.
-- `startDebounceWorker(onFlush)`: un `Worker` de BullMQ que al dispararse el job hace `LRANGE`+`DEL` de la lista bufferizada, junta los mensajes con `\n` y llama a `onFlush(source, userId, conversationId, textoJunto)`.
-- Por qué BullMQ y no un `setTimeout` en memoria: aunque hoy es un solo proceso, esto sobrevive restarts/deploys de Coolify y ya deja la base para escalar a múltiples instancias/canales (WhatsApp) sin reescribir la lógica.
+  - Busca el job delayed existente en la cola BullMQ `message-debounce` (`jobId = "{source}:{userId}"`); si existe y sigue `delayed`, lo remueve.
+  - Vuelve a agregar el job con el mismo `jobId`, `delay: DEBOUNCE_MS` (4000ms) y payload `{source, userId, conversationId}` — reinicia la ventana de espera en cada mensaje nuevo del mismo usuario y actualiza el `conversationId` por si cambió. `removeOnComplete`/`removeOnFail: true` para que el `jobId` quede libre de nuevo apenas se procesa (si no, BullMQ reusa el job "completed" en vez de crear uno nuevo delayed).
+  - Si el `add` falla (caso raro: el job anterior está `active` justo en ese instante), se loguea un warning y no rompe — el mensaje ya quedó en el buffer y se recoge en el próximo flush que dispare ese usuario.
+- `startDebounceWorker(onFlush)`: `Worker` de BullMQ que al dispararse hace `LRANGE`+`DEL` de la lista bufferizada, junta los mensajes con `\n` y llama a `onFlush(source, userId, conversationId, textoJunto)`.
+- `closeDebounceQueue(worker)`: cierra Worker + Queue prolijamente para el shutdown.
+- Por qué BullMQ y no un `setTimeout` en memoria: sobrevive restarts/deploys de Coolify y deja la base para escalar a múltiples instancias/canales (WhatsApp) sin reescribir la lógica.
 
-### Paso 3 — Refactor de `channels/slack/message-handler.ts`
-- Extraer la lógica actual de `askDaniel` + manejo de error/auto-escalación + respuesta (líneas 41-76 hoy) a una función reutilizable, ej. `handleResolvedMessage(client, channelId, slackUserId, texto)`, para que la pueda llamar tanto el handler de mensaje entrante como el callback de `onFlush`.
-- El handler de `app.message` pasa a llamar `bufferMessage("slack", slackUserId, channelId, texto)` en vez de `askDaniel` directo (el dedupe por `client_msg_id` se mantiene igual, antes del buffer).
-- `bot.ts`: después de `registerMessageHandler`, arrancar `startDebounceWorker(...)` pasándole un callback que use `app.client.chat.postMessage({channel: conversationId, text})` para responder (ya no hay `say()` disponible fuera del evento original).
-- Shutdown (`SIGINT`/`SIGTERM` en `bot.ts`): cerrar también el Worker/Queue de BullMQ y `closeRedis()`, no solo `app.stop()`.
+### Paso 3 — Refactor de `channels/slack/message-handler.ts` (HECHO)
+- Extraída la lógica de `askDaniel` + manejo de error/auto-escalación + respuesta a `handleResolvedMessage(client, slackUserId, texto, respond)` — `respond` es un callback genérico (`say()` o `chat.postMessage`), así la puede llamar tanto el handler de mensaje entrante como el `onFlush` del worker.
+- `registerMessageHandler` ahora solo dedupea por `client_msg_id` (igual que antes) y llama `bufferMessage("slack", slackUserId, channelId, texto)` en vez de `askDaniel` directo.
+- `bot.ts`: después de `registerMessageHandler`, arranca `startDebounceWorker(...)` con un callback que usa `app.client.chat.postMessage({channel: channelId, text})` para responder.
+- Shutdown (`SIGINT`/`SIGTERM` en `bot.ts`) ahora también cierra el Worker/Queue de BullMQ (`closeDebounceQueue`) y `closeRedis()`, además de `app.stop()`.
+- Verificado: `npx tsc --noEmit` limpio y `npm test` 37/37 verdes (sin tests nuevos para el debounce todavía — necesita Redis real o un mock, no se agregó en esta pasada).
 
-### Paso 4 — Probar en vivo
+### Paso 4 — Probar en vivo (pendiente, bloqueado en Paso 0)
 - Mandar 3-4 mensajes seguidos a Daniel en Slack (simulando multi-línea de WhatsApp) y confirmar: una sola llamada a `askDaniel` con todo el texto junto, una sola respuesta, sin duplicar tickets.
 - Revisar logs de Coolify por errores de conexión a Redis.
+- **Importante**: con este cambio, hasta un mensaje único ahora tarda ~4s más en responder (pasa siempre por el debounce, no solo cuando hay ráfaga) — confirmar que ese delay es aceptable en la prueba en vivo.
 
 ### Paso 5 (después del debounce) — KB vectorizada en Mongo Atlas
 - Todavía sin diseñar en detalle. Alcance acordado: migrar los 16 FAQs de `data/faqs.json` y los 7 clientes de `data/customers.json` a una colección con embeddings + Atlas Vector Search, reemplazando el keyword-match actual de `knowledge-base/faqs.ts` por similarity search. Requiere elegir modelo de embeddings (vía OpenRouter o directo) y crear el Vector Search Index en Atlas. Diseñar cuando se retome este punto.
@@ -205,11 +209,11 @@ Diseño acordado (channel-agnostic, para que Slack y WhatsApp compartan la misma
 3. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
-4. **(Nuevo, en pausa a mitad de camino, 2026-08-03) Debounce/cola de mensajes con Redis, después KB vectorizada en Mongo Atlas.** Ver el detalle completo paso a paso en la sección "Plan pendiente" más arriba en este mismo archivo — retomar desde ahí, no desde cero.
+4. **(2026-08-03/04) Debounce/cola de mensajes con Redis — código completo, falta conectar Redis real y probar en vivo.** Ver el detalle completo paso a paso en la sección "Plan pendiente" más arriba en este mismo archivo.
    - Redis ya está desplegado en Coolify (recurso sano dentro del proyecto `daniel-agent`), solo falta conectarlo.
-   - **Bloqueante inmediato**: Jorge tiene que copiar la Internal Connection String de Redis desde Coolify y cargarla como `REDIS_URL` en las Environment Variables de la app.
-   - Groundwork de código ya hecho pero sin commitear: `package.json` (+`ioredis`/`bullmq`), `src/config/env.ts` (+`REDIS_URL`), `src/integrations/redis/client.ts` (nuevo). Falta `npm install`, el módulo `messaging/debounce-queue.ts`, el refactor de `channels/slack/message-handler.ts` y el wiring en `bot.ts`.
-   - Orden acordado: debounce/cola primero (bloqueante para soportar bien WhatsApp), KB vectorizada después (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
+   - **Bloqueante inmediato**: Jorge tiene que copiar la Internal Connection String de Redis desde Coolify y cargarla como `REDIS_URL` en las Environment Variables de la app (Paso 0, sin hacer todavía).
+   - Código: **completo** — `package.json` (+`ioredis`/`bullmq`, `npm install` corrido), `src/config/env.ts` (+`REDIS_URL`), `src/integrations/redis/client.ts`, `src/messaging/debounce-queue.ts` (nuevo), refactor de `channels/slack/message-handler.ts` (`handleResolvedMessage` extraída) y wiring en `bot.ts` (worker + shutdown). `tsc --noEmit` limpio, 37/37 tests verdes. Sin probar contra un Redis real todavía (no hay `REDIS_URL` en esta máquina).
+   - Después de esto: KB vectorizada en Mongo Atlas (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
 
 ## Referencia rápida del stack
 
