@@ -72,9 +72,13 @@ export function registerMessageHandler(app: App, botUserId: string): void {
   app.message(async ({ message }) => {
     if (message.subtype) return;
     if (!("text" in message) || !message.text) return;
-    if (!message.text.includes(mentionTag)) return;
     if (!("user" in message) || !message.user) return;
     if (!("channel" in message) || !message.channel) return;
+
+    // En un DM no tiene sentido pedirle al cliente que mencione al bot; en canales
+    // (donde Daniel convive con otra gente) sí seguimos exigiendo la mención.
+    const isDirectMessage = "channel_type" in message && message.channel_type === "im";
+    if (!isDirectMessage && !message.text.includes(mentionTag)) return;
 
     const slackUserId = message.user;
     const channelId = message.channel;
