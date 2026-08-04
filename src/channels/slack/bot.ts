@@ -40,6 +40,6 @@ export async function startSlackBot(): Promise<void> {
 
   getRedis()
     .ping()
-    .then((res) => logger.info({ res }, "DEBUG redis ping ok"))
-    .catch((err) => logger.error({ err }, "DEBUG redis ping falló"));
+    .then(() => logger.info("Redis conectado (ping ok)"))
+    .catch((err) => logger.error({ err }, "No se pudo conectar a Redis"));
 }

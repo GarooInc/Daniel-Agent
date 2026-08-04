@@ -3,7 +3,7 @@ import { getRedis } from "../integrations/redis/client.js";
 import { logger } from "../config/logger.js";
 
 const QUEUE_NAME = "message-debounce";
-const DEBOUNCE_MS = 30000; // TEMPORAL: subido de 10000 a 30000 para dar margen a pruebas manuales en vivo
+const DEBOUNCE_MS = 10000;
 
 interface DebounceJobData {
   source: string;
@@ -47,7 +47,7 @@ export async function bufferMessage(
   texto: string,
 ): Promise<void> {
   const redis = getRedis();
-  const bufferLength = await redis.rpush(bufferKey(source, userId), texto);
+  await redis.rpush(bufferKey(source, userId), texto);
 
   const q = getQueue();
   const id = jobId(source, userId);
@@ -56,15 +56,13 @@ export async function bufferMessage(
   if (existing && existingState === "delayed") {
     await existing.remove();
   }
-  logger.info({ source, userId, bufferLength, existingState }, "DEBUG bufferMessage");
 
   try {
-    const job = await q.add(
+    await q.add(
       "flush",
       { source, userId, conversationId },
       { jobId: id, delay: DEBOUNCE_MS, removeOnComplete: true, removeOnFail: true },
     );
-    logger.info({ source, userId, jobDelay: job.opts.delay, jobTimestamp: job.timestamp }, "DEBUG job agendado");
   } catch (error) {
     // Puede pasar si el job anterior ya está "activo" (el worker lo está procesando justo
     // ahora) — no es crítico: el mensaje ya quedó bufferizado y se recoge en el próximo flush.
@@ -81,8 +79,6 @@ export function startDebounceWorker(onFlush: FlushHandler): Worker<DebounceJobDa
       const redis = getRedis();
       const mensajes = await redis.lrange(key, 0, -1);
       await redis.del(key);
-
-      logger.info({ source, userId, count: mensajes.length, mensajes }, "DEBUG flush de debounce");
 
       if (mensajes.length === 0) return;
 

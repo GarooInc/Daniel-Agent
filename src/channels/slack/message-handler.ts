@@ -70,17 +70,6 @@ export function registerMessageHandler(app: App, botUserId: string): void {
   const mentionTag = `<@${botUserId}>`;
 
   app.message(async ({ message }) => {
-    logger.info(
-      {
-        subtype: "subtype" in message ? message.subtype : undefined,
-        channelType: "channel_type" in message ? message.channel_type : undefined,
-        hasText: "text" in message && !!message.text,
-        user: "user" in message ? message.user : undefined,
-        channel: "channel" in message ? message.channel : undefined,
-      },
-      "DEBUG evento de mensaje crudo recibido",
-    );
-
     if (message.subtype) return;
     if (!("text" in message) || !message.text) return;
     if (!("user" in message) || !message.user) return;
@@ -104,15 +93,10 @@ export function registerMessageHandler(app: App, botUserId: string): void {
 
     const texto = message.text.replaceAll(mentionTag, "").trim();
 
-    logger.info({ slackUserId }, "DEBUG por llamar a bufferMessage");
     try {
-      await Promise.race([
-        bufferMessage("slack", slackUserId, channelId, texto),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("bufferMessage no resolvió en 8s")), 8000)),
-      ]);
-      logger.info({ slackUserId }, "DEBUG bufferMessage resuelto ok");
+      await bufferMessage("slack", slackUserId, channelId, texto);
     } catch (error) {
-      logger.error({ err: error, slackUserId }, "DEBUG bufferMessage falló o se colgó");
+      logger.error({ err: error, slackUserId }, "No se pudo bufferizar el mensaje para el debounce");
     }
   });
 }

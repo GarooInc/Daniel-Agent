@@ -176,7 +176,7 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 - Shutdown (`SIGINT`/`SIGTERM` en `bot.ts`) ahora también cierra el Worker/Queue de BullMQ (`closeDebounceQueue`) y `closeRedis()`, además de `app.stop()`.
 - Verificado: `npx tsc --noEmit` limpio y `npm test` 37/37 verdes (sin tests nuevos para el debounce todavía — necesita Redis real o un mock, no se agregó en esta pasada).
 
-### Paso 4 — Probar en vivo (EN CURSO, 2026-08-04 — sesión larga de debugging en producción)
+### Paso 4 — Probar en vivo (HECHO, 2026-08-04 — confirmado funcionando)
 
 `REDIS_URL` ya está cargado y funcionando en Coolify. Se encontraron y arreglaron **tres bugs reales distintos** antes de que el debounce empezara a andar:
 
@@ -188,7 +188,7 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 
 **Efecto colateral del bug del jobId**: como el `RPUSH` a la lista de Redis (`buffer:slack:USERID`) sí funcionaba siempre (solo fallaba el `add` del job), **los mensajes de todas las pruebas fallidas de esta sesión quedaron acumulados sin límite en esa lista**, porque nunca hubo un worker que hiciera `LRANGE`+`DEL`. El primer flush exitoso después del fix trajo mezclado contenido viejo (`"hola"`, `"tengo problemas con isabella"` de pruebas anteriores) junto con el mensaje nuevo. Ya se limpió solo (el flush hace `DEL` después de leer), así que las prueban siguientes deberían partir de un buffer limpio.
 
-**Estado al pausar (2026-08-04, madrugada)**: con los 4 bugs arriba resueltos, se hizo una prueba con 3 mensajes limpios (`"mensaje uno"`/`"mensaje dos"`/`"mensaje tres"`) y **todavía llegaron 3 respuestas separadas de Daniel en vez de una sola combinada** — un comportamiento nuevo, no diagnosticado todavía (el panel de Logs de Coolify seguía mostrando contenido en caché de la prueba anterior en el momento de pausar; hace falta recargar con F5 y volver a pedir el log de esa corrida puntual antes de seguir).
+**Resuelto (2026-08-04, misma sesión): la "3 respuestas separadas" no era un bug de código — era timing de la prueba manual.** Con los 4 bugs de arriba ya resueltos, una prueba con 3 mensajes escritos a mano en Slack seguía dando respuestas separadas en vez de una sola combinada. Subir `DEBOUNCE_MS` temporalmente a 30000 (commit `93850d6`) para dar más margen confirmó la causa real: escribir 3 mensajes a mano toma más de 10s entre alguno de ellos, así que el job del mensaje anterior ya se disparaba antes de que llegara el siguiente — comportamiento esperado del debounce, no una falla. Con margen de 30s, el log mostró la secuencia correcta (2do y 3er mensaje con `existingState:"delayed"`, cancelando y reagendando el job) y **un solo flush con `count:3`**, y Daniel respondió una sola vez cubriendo los 3 mensajes. `DEBOUNCE_MS` se devolvió a `10000` (valor de producción, decisión de Jorge) una vez confirmado. Todo el logging de debug temporal (`bot.ts`, `message-handler.ts`, `debounce-queue.ts` — dump de eventos crudos, timeout de 8s alrededor de `bufferMessage`, contenido de mensajes en el log de flush) fue removido; el ping de Redis al arrancar se mantuvo como chequeo de salud permanente, sin el prefijo "DEBUG".
 
 **Fricción de herramientas de Coolify encontrada en esta sesión (no relacionada al código, pero relevante para seguir debuggeando)**:
 - El panel de **Logs** no se actualiza solo ni con el ícono de refresh — hay que recargar la página completa (F5) cada vez para traer líneas nuevas.
@@ -234,9 +234,7 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 3. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
-4. **(2026-08-03/04) Debounce/cola de mensajes con Redis — Redis ya conectado y funcionando, pero el debounce todavía no da una sola respuesta por ráfaga.** Ver el detalle completo (4 bugs reales encontrados y arreglados esta sesión: formato de URL, hostname mal copiado por Coolify, contraseña desincronizada, y un bug de código real en `jobId` de BullMQ) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo — **leer esa sección primero al retomar, tiene todo el diagnóstico paso a paso, no re-derivar**.
-   - Lo último sin resolver: una prueba limpia con 3 mensajes distintos generó 3 respuestas separadas de Daniel en vez de una combinada. Falta pedir el log de esa corrida puntual (recargando Logs con F5, el panel no se auto-actualiza) para ver si el job de BullMQ se está re-agendando bien o si cada mensaje crea uno nuevo en paralelo.
-   - Hay logging de debug temporal en 3 archivos (`bot.ts`, `message-handler.ts`, `debounce-queue.ts`) que hay que sacar una vez esté todo confirmado funcionando.
+4. **Debounce/cola de mensajes con Redis — HECHO y confirmado en vivo (2026-08-03/04).** Ver el detalle completo (4 bugs de infra/código encontrados y arreglados, más el diagnóstico final de que "3 respuestas separadas" era timing de la prueba manual, no un bug) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo. `DEBOUNCE_MS = 10000` en producción, logging de debug temporal ya removido de los 3 archivos donde se había agregado.
    - Después de esto: KB vectorizada en Mongo Atlas (Paso 5, migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
 
 ## Referencia rápida del stack
