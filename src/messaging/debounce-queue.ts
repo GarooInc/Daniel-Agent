@@ -23,7 +23,8 @@ function bufferKey(source: string, userId: string): string {
 }
 
 function jobId(source: string, userId: string): string {
-  return `${source}:${userId}`;
+  // BullMQ prohíbe ":" en IDs de job personalizados (choca con su propio namespacing interno).
+  return `${source}_${userId}`;
 }
 
 let queue: Queue<DebounceJobData> | undefined;
