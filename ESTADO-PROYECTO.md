@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-03
+Última actualización: 2026-08-04
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -176,10 +176,35 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 - Shutdown (`SIGINT`/`SIGTERM` en `bot.ts`) ahora también cierra el Worker/Queue de BullMQ (`closeDebounceQueue`) y `closeRedis()`, además de `app.stop()`.
 - Verificado: `npx tsc --noEmit` limpio y `npm test` 37/37 verdes (sin tests nuevos para el debounce todavía — necesita Redis real o un mock, no se agregó en esta pasada).
 
-### Paso 4 — Probar en vivo (pendiente, bloqueado en Paso 0)
-- Mandar 3-4 mensajes seguidos a Daniel en Slack (simulando multi-línea de WhatsApp) y confirmar: una sola llamada a `askDaniel` con todo el texto junto, una sola respuesta, sin duplicar tickets.
-- Revisar logs de Coolify por errores de conexión a Redis.
-- **Importante**: con este cambio, hasta un mensaje único ahora tarda ~4s más en responder (pasa siempre por el debounce, no solo cuando hay ráfaga) — confirmar que ese delay es aceptable en la prueba en vivo.
+### Paso 4 — Probar en vivo (EN CURSO, 2026-08-04 — sesión larga de debugging en producción)
+
+`REDIS_URL` ya está cargado y funcionando en Coolify. Se encontraron y arreglaron **tres bugs reales distintos** antes de que el debounce empezara a andar:
+
+1. **Formato de la URL**: la contraseña necesitaba `:` antes (`redis://:PASSWORD@host`, no `redis://PASSWORD@host`) — sin eso, el parser de URL trata todo el bloque como usuario en vez de contraseña.
+2. **Hostname mal copiado — letra O vs número 0**: el campo "Redis URL (internal)" de Coolify mostraba el host terminado en `...jaqOs` (letra O), pero el hostname real que Docker resuelve (confirmado contra el `--add-host` que Coolify genera en cada build) es `...jaq0s` (número 0). Con la letra, la conexión no fallaba con un error — se quedaba colgada para siempre intentando resolver un host que no existe, porque `maxRetriesPerRequest: null` (necesario para BullMQ) hace que ioredis reintente indefinidamente sin nunca rechazar el comando. Esto se diagnosticó agregando un `getRedis().ping()` en el arranque (`bot.ts`) con log de éxito/error — reveló el cuelgue silencioso.
+3. **Contraseña desincronizada**: incluso con el hostname y formato corregidos, seguía devolviendo `WRONGPASS` (probado tanto con `redis://:PASSWORD@host` como con `redis://default:PASSWORD@host`, usuario explícito). Se resolvió **regenerando la contraseña de Redis** directo en Coolify (recurso Redis → Configuration → General → Password → Save) y volviendo a copiar el "Redis URL (internal)" ya actualizado. Confirmado con `PONG` en el log de `DEBUG redis ping ok`. Causa exacta de la desincronización original: sin determinar (no crítico ahora que se regeneró).
+
+**Cuarto bug, este sí en nuestro código, y el que realmente bloqueaba el debounce completo**: `src/messaging/debounce-queue.ts`'s `jobId(source, userId)` devolvía `"slack:USERID"` (con `:`), y **BullMQ prohíbe `:` en IDs de job personalizados** (`Error: Custom Id cannot contain :`, tirado dentro de `Queue.add()`). Como ese error caía en el `catch` de `bufferMessage` y solo logueaba un warning, **nunca se llegó a agendar ni un solo job de debounce** en ninguna prueba anterior a este fix (commit `13427d9`) — por eso todas las respuestas anteriores llegaban casi instantáneas, sin importar el valor de `DEBOUNCE_MS`. Fix: separador cambiado a `_` (`"slack_USERID"`).
+
+**Efecto colateral del bug del jobId**: como el `RPUSH` a la lista de Redis (`buffer:slack:USERID`) sí funcionaba siempre (solo fallaba el `add` del job), **los mensajes de todas las pruebas fallidas de esta sesión quedaron acumulados sin límite en esa lista**, porque nunca hubo un worker que hiciera `LRANGE`+`DEL`. El primer flush exitoso después del fix trajo mezclado contenido viejo (`"hola"`, `"tengo problemas con isabella"` de pruebas anteriores) junto con el mensaje nuevo. Ya se limpió solo (el flush hace `DEL` después de leer), así que las prueban siguientes deberían partir de un buffer limpio.
+
+**Estado al pausar (2026-08-04, madrugada)**: con los 4 bugs arriba resueltos, se hizo una prueba con 3 mensajes limpios (`"mensaje uno"`/`"mensaje dos"`/`"mensaje tres"`) y **todavía llegaron 3 respuestas separadas de Daniel en vez de una sola combinada** — un comportamiento nuevo, no diagnosticado todavía (el panel de Logs de Coolify seguía mostrando contenido en caché de la prueba anterior en el momento de pausar; hace falta recargar con F5 y volver a pedir el log de esa corrida puntual antes de seguir).
+
+**Fricción de herramientas de Coolify encontrada en esta sesión (no relacionada al código, pero relevante para seguir debuggeando)**:
+- El panel de **Logs** no se actualiza solo ni con el ícono de refresh — hay que recargar la página completa (F5) cada vez para traer líneas nuevas.
+- La pestaña **Terminal** (tanto en la app como en el recurso Redis) tira "Terminal websocket connection lost" de forma consistente — no se pudo usar en toda la sesión.
+- El log de **Deployments** (build) es distinto del de **Logs** (runtime) — hay que mirar el correcto según lo que se necesite ver.
+
+**Logging de debug temporal agregado esta sesión — sacar una vez que el debounce esté 100% confirmado andando bien**:
+- `src/channels/slack/bot.ts`: ping a Redis al arrancar (`DEBUG redis ping ok/falló`).
+- `src/channels/slack/message-handler.ts`: log del evento crudo de Slack antes de cualquier filtro, y log antes/después/catch de `bufferMessage` con timeout de 8s.
+- `src/messaging/debounce-queue.ts`: logs `DEBUG bufferMessage`, `DEBUG job agendado`, `DEBUG flush de debounce` (este último loguea el array completo de mensajes, útil para diagnosticar pero verboso para dejar en producción).
+
+**Nota de seguridad encontrada de paso (no bloqueante)**: Coolify hornea todos los secrets de la app (`REDIS_URL` incluido) como `ARG` de Docker durante el build — quedan visibles en el historial de capas de la imagen. Hay un checkbox "Use Docker Build Secrets" sin tildar en la pantalla de Environment Variables que probablemente evite esto — pendiente de revisar, no bloquea el trabajo actual.
+
+**Cuando se retome**: pedir el log fresco (F5) de la prueba de "mensaje uno/dos/tres" para ver cuántos `DEBUG evento de mensaje crudo recibido` / `DEBUG job agendado` / `DEBUG flush de debounce` aparecieron — eso va a decir si el problema es que cada mensaje sigue generando su propio job (algo en la lógica de "buscar y remover el job delayed existente" no está encontrando el job anterior) o algo distinto.
+
+- **Importante, todavía por confirmar una vez que el debounce ande bien**: con este cambio, hasta un mensaje único ahora tarda ~10s más en responder (pasa siempre por el debounce, no solo cuando hay ráfaga) — confirmar que ese delay es aceptable en uso real, o bajarlo.
 
 ### Paso 5 (después del debounce) — KB vectorizada en Mongo Atlas
 - Todavía sin diseñar en detalle. Alcance acordado: migrar los 16 FAQs de `data/faqs.json` y los 7 clientes de `data/customers.json` a una colección con embeddings + Atlas Vector Search, reemplazando el keyword-match actual de `knowledge-base/faqs.ts` por similarity search. Requiere elegir modelo de embeddings (vía OpenRouter o directo) y crear el Vector Search Index en Atlas. Diseñar cuando se retome este punto.
@@ -209,11 +234,10 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 3. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
-4. **(2026-08-03/04) Debounce/cola de mensajes con Redis — código completo, falta conectar Redis real y probar en vivo.** Ver el detalle completo paso a paso en la sección "Plan pendiente" más arriba en este mismo archivo.
-   - Redis ya está desplegado en Coolify (recurso sano dentro del proyecto `daniel-agent`), solo falta conectarlo.
-   - **Bloqueante inmediato**: Jorge tiene que copiar la Internal Connection String de Redis desde Coolify y cargarla como `REDIS_URL` en las Environment Variables de la app (Paso 0, sin hacer todavía).
-   - Código: **completo** — `package.json` (+`ioredis`/`bullmq`, `npm install` corrido), `src/config/env.ts` (+`REDIS_URL`), `src/integrations/redis/client.ts`, `src/messaging/debounce-queue.ts` (nuevo), refactor de `channels/slack/message-handler.ts` (`handleResolvedMessage` extraída) y wiring en `bot.ts` (worker + shutdown). `tsc --noEmit` limpio, 37/37 tests verdes. Sin probar contra un Redis real todavía (no hay `REDIS_URL` en esta máquina).
-   - Después de esto: KB vectorizada en Mongo Atlas (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
+4. **(2026-08-03/04) Debounce/cola de mensajes con Redis — Redis ya conectado y funcionando, pero el debounce todavía no da una sola respuesta por ráfaga.** Ver el detalle completo (4 bugs reales encontrados y arreglados esta sesión: formato de URL, hostname mal copiado por Coolify, contraseña desincronizada, y un bug de código real en `jobId` de BullMQ) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo — **leer esa sección primero al retomar, tiene todo el diagnóstico paso a paso, no re-derivar**.
+   - Lo último sin resolver: una prueba limpia con 3 mensajes distintos generó 3 respuestas separadas de Daniel en vez de una combinada. Falta pedir el log de esa corrida puntual (recargando Logs con F5, el panel no se auto-actualiza) para ver si el job de BullMQ se está re-agendando bien o si cada mensaje crea uno nuevo en paralelo.
+   - Hay logging de debug temporal en 3 archivos (`bot.ts`, `message-handler.ts`, `debounce-queue.ts`) que hay que sacar una vez esté todo confirmado funcionando.
+   - Después de esto: KB vectorizada en Mongo Atlas (Paso 5, migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
 
 ## Referencia rápida del stack
 
