@@ -3,7 +3,7 @@ import { getRedis } from "../integrations/redis/client.js";
 import { logger } from "../config/logger.js";
 
 const QUEUE_NAME = "message-debounce";
-const DEBOUNCE_MS = 10000;
+const DEBOUNCE_MS = 30000; // TEMPORAL: subido de 10000 a 30000 para dar margen a pruebas manuales en vivo
 
 interface DebounceJobData {
   source: string;
