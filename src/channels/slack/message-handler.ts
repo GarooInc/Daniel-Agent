@@ -70,6 +70,17 @@ export function registerMessageHandler(app: App, botUserId: string): void {
   const mentionTag = `<@${botUserId}>`;
 
   app.message(async ({ message }) => {
+    logger.info(
+      {
+        subtype: "subtype" in message ? message.subtype : undefined,
+        channelType: "channel_type" in message ? message.channel_type : undefined,
+        hasText: "text" in message && !!message.text,
+        user: "user" in message ? message.user : undefined,
+        channel: "channel" in message ? message.channel : undefined,
+      },
+      "DEBUG evento de mensaje crudo recibido",
+    );
+
     if (message.subtype) return;
     if (!("text" in message) || !message.text) return;
     if (!("user" in message) || !message.user) return;
