@@ -103,6 +103,16 @@ export function registerMessageHandler(app: App, botUserId: string): void {
     }
 
     const texto = message.text.replaceAll(mentionTag, "").trim();
-    await bufferMessage("slack", slackUserId, channelId, texto);
+
+    logger.info({ slackUserId }, "DEBUG por llamar a bufferMessage");
+    try {
+      await Promise.race([
+        bufferMessage("slack", slackUserId, channelId, texto),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("bufferMessage no resolvió en 8s")), 8000)),
+      ]);
+      logger.info({ slackUserId }, "DEBUG bufferMessage resuelto ok");
+    } catch (error) {
+      logger.error({ err: error, slackUserId }, "DEBUG bufferMessage falló o se colgó");
+    }
   });
 }

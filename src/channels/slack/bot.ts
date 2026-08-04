@@ -3,7 +3,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { registerMessageHandler, handleResolvedMessage } from "./message-handler.js";
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
-import { closeRedis } from "../../integrations/redis/client.js";
+import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 
 const { App } = bolt;
 
@@ -37,4 +37,9 @@ export async function startSlackBot(): Promise<void> {
 
   await app.start();
   logger.info("⚡️ Daniel está corriendo (Slack Socket Mode)");
+
+  getRedis()
+    .ping()
+    .then((res) => logger.info({ res }, "DEBUG redis ping ok"))
+    .catch((err) => logger.error({ err }, "DEBUG redis ping falló"));
 }
