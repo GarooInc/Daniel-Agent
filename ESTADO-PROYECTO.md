@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-04 (tarde)
+Última actualización: 2026-08-04 (noche)
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -211,30 +211,52 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 ### Paso 5 (después del debounce) — KB vectorizada en Mongo Atlas
 - Todavía sin diseñar en detalle. Alcance acordado: migrar los 16 FAQs de `data/faqs.json` y los 7 clientes de `data/customers.json` a una colección con embeddings + Atlas Vector Search, reemplazando el keyword-match actual de `knowledge-base/faqs.ts` por similarity search. Requiere elegir modelo de embeddings (vía OpenRouter o directo) y crear el Vector Search Index en Atlas. Diseñar cuando se retome este punto.
 
+## Hallazgo mayor (2026-08-04, sesión noche): instancia fantasma respondiendo en paralelo a producción
+
+Se retomó el diagnóstico del bug de `#escalacion` (punto 0 abajo) dándole a Claude Code acceso directo a la VPS vía la terminal web de hPanel (Hostinger) — la de Coolify sigue rota ("Terminal websocket connection lost"), esta sí funcionó.
+
+**Contenedor duplicado descartado para esta VPS**: `docker ps`/`docker ps -a` mostró un solo contenedor de `daniel-agent`, y `docker exec ... ps aux` adentro mostró un solo proceso `node dist/slack.js`. La teoría del contenedor huérfano en *esta* VPS específicamente queda descartada.
+
+**Pero aparecido un bug real distinto, y más grave, durante una prueba en vivo**: en una conversación de escalación por Slack, el turno 3 (el cliente contesta "urgente") volvió una respuesta que repetía preguntas ya respondidas (nombre, email, producto, descripción) como si la conversación arrancara de cero — a pesar de que `ticket_drafts` en Mongo tenía todos esos datos bien guardados. Se investigó a fondo:
+- El log completo del contenedor (`docker logs`, sin recortar) y dos dumps directos a Mongo (`chat_histories`/`ticket_drafts` del `slackUserId` de la prueba) confirmaron que **ese turno 3 nunca tocó ni el log ni la base de producción** — ni un registro humano, ni de IA, ni cambios al draft. Cero rastro, dos veces, con tiempo de sobra entre medio (no era timing).
+- **Prueba decisiva**: se hizo un test en tiempo real nuevo, y luego se **paró el contenedor de producción** (`docker stop`) y se mandó otro mensaje de prueba — **Daniel respondió igual, con el contenedor real apagado.**
+- Esto confirma que **hay (o había) otro proceso, en otro lugar, conectado con las mismas credenciales reales de Slack** (`SLACK_BOT_TOKEN`/`SLACK_APP_TOKEN`), contestando en paralelo. Se descartó como causa: la Mac de Jorge (sin proceso `node` de Daniel corriendo), la máquina Windows (apagada), un segundo recurso "Application" en Coolify (solo hay uno), un segundo contenedor Docker, y un segundo proceso Node dentro del mismo contenedor.
+- Hipótesis líder, sin confirmar todavía: alguien del equipo (iniciativa RedTec/dogfooding) tiene un clone del repo con el `.env` real cargado y corrió/dejó corriendo `npm run dev:slack` en su máquina — probablemente sin `MONGODB_DB_NAME` configurado (cae al default `daniel`, separado de `DanielSoporte` de producción), lo cual explicaría por qué esa instancia respondía sin memoria alguna (su propia base, vacía) y por qué no deja rastro en la base de producción que sí auditamos.
+- **Nota aparte, no relacionada con el fantasma**: durante esta sesión también se vio un restart real del contenedor (`SIGTERM`/`Cerrando Daniel...` en el log, sin que nadie tocara Coolify) — resultó ser causado por un `apt update && apt upgrade` corrido directo en la VPS (probablemente reinició el daemon de Docker o pidió reinicio del sistema). No es un problema recurrente de la app, se descarta como pista.
+
+**Acción tomada para intentar cortarle el paso al fantasma (en curso, sin confirmar el resultado todavía)**: se rotaron las credenciales de Slack —
+- **App-Level Token (`xapp-...`, el de Socket Mode)**: se regeneró y sí cambió. Importante para este fix porque **la conexión de Socket Mode (recibir eventos) depende del App Token, no del Bot Token** — si el fantasma tenía el viejo, debería desconectarse al invalidarse.
+- **Bot Token (`xoxb-...`)**: intentado reinstalar la app vía "Install App" → "Reinstall to Workspace", pero **el valor no cambió** — sospecha de que Slack no fuerza un token nuevo si los scopes no cambian y no se desinstala primero. Se le indicó a Jorge desinstalar del todo antes de reinstalar para forzar un valor nuevo, pero según lo último reportado el Bot Token sigue siendo el mismo. No debería bloquear el test (lo que corta al fantasma es el App Token, no el Bot Token), pero queda como cabo suelto a entender si hace falta rotar el Bot Token de verdad más adelante.
+- Ambos valores (el App Token nuevo + el Bot Token sin cambios) ya están cargados en Coolify, y se hizo **Redeploy** (contenedor nuevo, ver abajo). **Pendiente**: mandar un mensaje de prueba post-redeploy y confirmar si el fantasma dejó de responder — resultado todavía no reportado por Jorge al momento de escribir esto.
+- Si el fantasma sigue respondiendo igual después de esto, la teoría de "proceso con `.env` viejo" queda descartada, y el siguiente paso sería revisar en el admin de Slack si hay más de una app instalada en el workspace, o un Workflow Builder automatizado respondiendo.
+
+**Bug de código real encontrado de paso (todavía sin arreglar), independiente del fantasma**: al inspeccionar `chat_histories` directo en Mongo durante esta investigación, se confirmó que tiene mensajes de pruebas viejas completamente distintas mezcladas (otro cliente ficticio, otro producto) que nunca se limpiaron. Causa: `daniel.ts` limpia `ticketDraft` cuando detecta `isNewSession`, pero **nunca llama a `clearHistory()` en ese mismo caso** — solo se limpia el historial cuando se crea un ticket con éxito. Esto significa que mensajes de una "sesión" que ya se consideró expirada (+1h sin actividad) siguen viviendo en Mongo y **vuelven a filtrarse en el contexto del modelo tan pronto la sesión deja de ser "nueva"** (es decir, desde el segundo mensaje de la siguiente sesión en adelante) — el mismo problema de fondo que ya se había arreglado para `ticket_drafts` en julio, pero sin el equivalente para `chat_histories` en la rama de sesión nueva. **Fix pendiente**: agregar `clearHistory(slackUserId)` junto a `clearTicketDraft(slackUserId)` en la rama `isNewSession` de `daniel.ts` (línea ~74-78).
+
 ## Pendientes / próximos pasos (en orden)
 
-0. **(Bloqueante #1, en curso, replanteado 2026-08-04) Diagnosticar por qué el aviso a `#escalacion` no llega, aunque el ticket sí se crea en Monday.**
+0. **(Bloqueante #1, en curso) Confirmar si la rotación de tokens de Slack eliminó la instancia fantasma — ver "Hallazgo mayor" arriba para el contexto completo.**
+   - Falta: reportar el resultado del mensaje de prueba post-redeploy (contenedor nuevo `6a483348cb21`). Si el fantasma sigue respondiendo, escalar a revisar apps/workflows adicionales en el admin de Slack.
+   - Una vez resuelto el fantasma, retomar el diagnóstico original de por qué el aviso a `#escalacion` no llega (puede ser la misma causa — el fantasma podría estar ganando la carrera de respuesta en algunos casos y no tener el código/credenciales de Monday-notify, o comportarse distinto).
+
+1. **(Bug de código confirmado, sin arreglar) Agregar `clearHistory()` a la rama `isNewSession` de `daniel.ts`** — ver "Hallazgo mayor" arriba. Bug real encontrado por inspección directa de Mongo, no solo teórico.
+
+2. **Diagnosticar por qué el aviso a `#escalacion` no llega, aunque el ticket sí se crea en Monday (retomar una vez descartado el fantasma).**
    - Los 3 datos que se estaban esperando ya se confirmaron y **descartan las hipótesis originales de scopes/invitación** — ver el detalle completo en "Estado actual" arriba (retest 2026-08-04, ticket `3138576597`): scopes completos, bot invitado al canal, y aun así sin aviso.
-   - El hallazgo nuevo y más relevante: el log de Coolify de esa prueba **no tenía ninguna línea sobre el mensaje procesado ni el ticket creado**, solo las líneas de arranque del proceso — sospecha de que el panel de Logs está mostrando un contenedor distinto al que realmente sostiene la conexión Socket Mode con Slack (el estado del recurso aparecía como `"Running (unknown)"` con ⚠️).
-   - **Siguiente paso acordado**: hacer **Restart** del recurso `daniel-agent` en Coolify (no Redeploy) para descartar el contenedor duplicado/huérfano, repetir el test de escalación, y volver a mirar el log fresco (F5). Si el log sigue sin mostrar nada de la actividad real después del restart, el problema no es de contenedores duplicados y hay que buscar en otro lado (ej. instrumentar `notifyEscalation` con más detalle, o verificar si el log driver de Coolify está perdiendo líneas).
-   - Se intentó (y no funcionó) dar acceso SSH directo a Claude Code a la VPS para poder correr `docker logs` sin depender del panel — conexión rechazada por timeout en los puertos 22/443/8000 desde el entorno de Claude Code, causa no identificada. Seguimos con capturas manuales del panel de Coolify por ahora.
+   - El hallazgo nuevo y más relevante de esa sesión: el log de Coolify de esa prueba **no tenía ninguna línea sobre el mensaje procesado ni el ticket creado**, solo las líneas de arranque del proceso.
+   - **Ya descartado en la sesión de esta noche**: el contenedor duplicado/huérfano *en esta VPS* no es la causa (un solo contenedor, un solo proceso Node) — pero la instancia fantasma en otro lugar (ver "Hallazgo mayor") es una nueva candidata a causa raíz, todavía sin confirmar ni descartar para este síntoma específico.
 
-1. **Diagnosticar y confirmar MongoDB en producción (Coolify) — causa raíz original de la amnesia del agente, todavía sin cerrar del todo.**
-   - **Síntoma observado (prueba en vivo 2026-07-31, sesión tarde)**: Daniel no recordaba nada entre mensajes del mismo usuario. El código local (test E2E con in-memory store) funciona perfectamente, así que el problema era de infraestructura, no de lógica.
-   - **En curso (sesión noche 2026-07-31)**: se pidió a Jorge revisar directo en MongoDB (vía terminal/mongosh) qué hay ahora mismo en `chat_histories`/`ticket_drafts`/`users`, para determinar si los mensajes no se están guardando o si se están borrando por algún motivo — **resultado todavía no reportado**.
-   - Nota: el ticket `3130442122` de la prueba más reciente sí se creó con el flujo normal (no fue una auto-escalación por error), lo cual es una señal indirecta de que el agente venía funcionando en ese turno — pero no reemplaza confirmar el estado real de las 3 colecciones en Mongo.
-   - **Cómo verificar si hace falta repetir**: entrar a Coolify → Application → Environment Variables y confirmar que `MONGODB_URI` existe con exactamente ese nombre y contiene el connection string de Atlas (`mongodb+srv://...`). También revisar los logs de Coolify buscando cualquier warn/error de MongoDB.
+3. **MongoDB en producción — RESUELTO/confirmado (2026-08-04 noche).** La duda original (2026-07-31) sobre si Mongo leía/escribía bien en producción quedó cerrada esta noche: se hicieron múltiples lecturas y escrituras directas a `chat_histories`/`ticket_drafts` desde dentro del contenedor real (vía `docker exec ... node -e`) durante la investigación del fantasma, todas consistentes y correctas. La conexión a Atlas funciona bien — el problema de amnesia que se seguía viendo era por el bug de `clearHistory()` (punto 1) y/o la instancia fantasma (punto 0), no por Mongo en sí.
 
-2. **Reprobar en vivo el flujo completo una vez que MongoDB y el aviso a `#escalacion` estén confirmados** — el test E2E pasó 9/9 localmente con in-memory store. Repetir el guión de varios turnos en Slack y verificar:
+4. **Reprobar en vivo el flujo completo una vez que el fantasma y el aviso a `#escalacion` estén confirmados/resueltos** — el test E2E pasó 9/9 localmente con in-memory store. Repetir el guión de varios turnos en Slack y verificar:
    - (a) ticket con producto/resumen/email reales (no genéricos)
    - (b) no repregunta datos ya dados
-   - (c) aviso en `#escalacion` llega (todavía sin confirmar — ver punto 0)
+   - (c) aviso en `#escalacion` llega (todavía sin confirmar — ver punto 0/2)
    - (d) perfil guardado en `users` para la próxima sesión
 
-3. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
+5. **Mover el bot a un VPS — HECHO (2026-07-29/30)** (ver detalles completos en la versión anterior de este archivo — sin cambios).
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
-4. **Debounce/cola de mensajes con Redis — HECHO y confirmado en vivo (2026-08-03/04).** Ver el detalle completo (4 bugs de infra/código encontrados y arreglados, más el diagnóstico final de que "3 respuestas separadas" era timing de la prueba manual, no un bug) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo. `DEBOUNCE_MS = 10000` en producción, logging de debug temporal ya removido de los 3 archivos donde se había agregado.
+6. **Debounce/cola de mensajes con Redis — HECHO y confirmado en vivo (2026-08-03/04).** Ver el detalle completo (4 bugs de infra/código encontrados y arreglados, más el diagnóstico final de que "3 respuestas separadas" era timing de la prueba manual, no un bug) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo. `DEBOUNCE_MS = 10000` en producción, logging de debug temporal ya removido de los 3 archivos donde se había agregado.
    - Después de esto: KB vectorizada en Mongo Atlas (Paso 5, migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
 
 ## Referencia rápida del stack
