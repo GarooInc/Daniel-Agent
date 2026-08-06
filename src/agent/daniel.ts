@@ -64,18 +64,30 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
     logger.info({ slackUserId, lastMessageAt: lastMessageAt?.toISOString() ?? null }, "Sesión nueva detectada — historial y borrador anteriores descartados");
   }
 
+  // Si es sesión nueva, limpiar lo viejo ANTES de appendear el mensaje entrante — no puede ir
+  // en el mismo Promise.all de abajo: clearHistory() borra el documento entero, así que si
+  // corriera en paralelo con (o después de) appendMessage() podría borrar el mensaje recién
+  // guardado en vez de solo lo viejo. Bug real (2026-08-04): clearTicketDraft ya se limpiaba
+  // acá, pero chat_histories no tenía equivalente — el historial de una sesión ya expirada
+  // seguía filtrándose en el contexto del modelo desde el segundo mensaje de la sesión nueva.
+  if (isNewSession) {
+    await Promise.all([
+      clearTicketDraft(slackUserId).catch((error) => {
+        logger.warn({ err: error, slackUserId }, "No se pudo limpiar el borrador de ticket viejo al iniciar sesión nueva");
+      }),
+      clearHistory(slackUserId).catch((error) => {
+        logger.warn({ err: error, slackUserId }, "No se pudo limpiar el historial de chat viejo al iniciar sesión nueva");
+      }),
+    ]);
+  }
+
   // Extracción automática de datos del ticket a partir de TODA la conversación — corre en
   // cada mensaje, sin depender de que el modelo principal decida llamar a escalar_a_monday
-  // con los datos correctos. En paralelo con guardar el mensaje entrante y con limpiar el
-  // borrador viejo si corresponde: ninguno de los tres depende del resultado de otro.
+  // con los datos correctos. En paralelo con guardar el mensaje entrante: ninguno depende del
+  // resultado del otro.
   const [, extracted] = await Promise.all([
     appendMessage(slackUserId, "human", userMessage),
     extractTicketFields(history, userMessage),
-    isNewSession
-      ? clearTicketDraft(slackUserId).catch((error) => {
-          logger.warn({ err: error, slackUserId }, "No se pudo limpiar el borrador de ticket viejo al iniciar sesión nueva");
-        })
-      : Promise.resolve(),
   ]);
 
   const effectiveDraft = mergeTicketFields(extracted, ticketDraft, profile ?? {});

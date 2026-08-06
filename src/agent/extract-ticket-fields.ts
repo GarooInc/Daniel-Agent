@@ -29,7 +29,8 @@ const extractionModel = new ChatOpenAI({
 const EXTRACTION_PROMPT =
   "Analizá esta conversación de soporte entre un cliente y Daniel (agente de RedTec) y extraé SOLO los datos " +
   "que el cliente haya dado de forma explícita y clara en cualquier punto de la conversación, para poder armar " +
-  "un ticket de soporte. No inventes ni infieras de más — si un dato no aparece con claridad, dejalo vacío.\n\n" +
+  "un ticket de soporte. No inventes ni infieras de más — si un dato no aparece con claridad, OMITÍ el campo " +
+  "por completo (no lo incluyas en la respuesta, y nunca uses un string vacío \"\" como valor).\n\n" +
   "Conversación:\n\n";
 
 // Corre en cada mensaje, independiente de si el modelo principal decide llamar a
