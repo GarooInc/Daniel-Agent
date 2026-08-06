@@ -5,6 +5,7 @@ import { registerMessageHandler, handleResolvedMessage } from "./message-handler
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getDb } from "../../integrations/mongo/client.js";
+import { connectRealtime, disconnectRealtime } from "../../integrations/redtec-realtime/client.js";
 
 const { App } = bolt;
 
@@ -29,6 +30,7 @@ export async function startSlackBot(): Promise<void> {
     logger.info({ signal }, "Cerrando Daniel...");
     await closeDebounceQueue(worker);
     await closeRedis();
+    disconnectRealtime();
     await app.stop();
     process.exit(0);
   };
@@ -48,6 +50,10 @@ export async function startSlackBot(): Promise<void> {
   } catch (err) {
     logger.error({ err }, "No se pudo calentar la conexión a Mongo al arrancar — se reintentará en el próximo mensaje");
   }
+
+  // No bloqueante a propósito: si RedTec todavía no confirmó URL/secreto, esto no hace nada
+  // (ver client.ts) y el resto del arranque sigue igual.
+  connectRealtime();
 
   await app.start();
   logger.info("⚡️ Daniel está corriendo (Slack Socket Mode)");

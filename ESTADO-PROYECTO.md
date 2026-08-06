@@ -61,6 +61,7 @@ src/
     tools/
       search-faqs.ts
       lookup-customer.ts
+      platform-health.ts        # estado_de_la_plataforma: lee platform_metrics (Mongo), nunca el socket en vivo
       escalate-to-monday.ts
       ticket-fields.ts          # campos requeridos, merge compartido, labels
       index.ts
@@ -84,6 +85,11 @@ src/
       ticket-draft.ts              # ticket_drafts: borrador de ticket en construcción
     slack/
       notify-escalation.ts     # avisa cada ticket creado en el canal #escalacion
+    redtec-realtime/          # WebSocket de tiempo real de RedTec Realstate (socket.io), ver abajo
+      client.ts                 # conexión singleton, no bloqueante si faltan credenciales
+      platform-metrics.ts        # persiste container.stats en Mongo (platform_metrics, TTL 7 días) + consultas por ventana
+      crm-events-cache.ts          # persiste lead.*/appointment.* en platform_events, sin lectura expuesta todavía
+      container-logs.ts             # utilidad interna para get_container_logs — NO conectada a ninguna tool
 
   data/
     faqs.json
@@ -146,6 +152,14 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 **Nota de red de esta máquina**: el fetch nativo de Node (`undici`) tiene timeouts intermitentes (`ETIMEDOUT`) contra hosts externos (pasó con `registry.npmjs.org`, `api.monday.com` y hasta `openrouter.ai`) que `curl` no sufre — parece un problema de resolución/preferencia IPv6 en esta máquina. Si el bot corriendo en otra máquina tiene llamadas que cuelgan o tardan mucho, probar arrancándolo con `NODE_OPTIONS="--dns-result-order=ipv4first" npm run dev:slack` antes de asumir que es un bug de la app.
 
 **Conector MCP de Monday.com disponible (sin usar todavía)**: apareció un conector `claude.ai monday.com` (requiere autenticar corriendo `/mcp` y eligiéndolo de la lista) que no existía cuando se definió el stack original. La integración ya construida (`src/integrations/monday/`) usa la API GraphQL directa y está probada — el MCP no la reemplazó, pero queda como opción para inspeccionar el tablero interactivamente sin escribir queries a mano.
+
+- [x] **WebSocket de tiempo real de RedTec Realstate — código completo, sin deployar todavía (2026-08-06)**: RedTec expone un canal `socket.io` único de plataforma (`wss://<dominio>/realtime`, guía `realtime-websocket-guide.pdf`) con eventos de CRM (`lead.*`/`appointment.*`, con `tenantId`) y métricas de infra de sus 2 contenedores (`container.stats` cada 30s + `get_container_logs` bajo demanda). Alcance de esta primera pasada, decidido con Jorge: **solo infra por ahora** — los eventos de CRM se ingieren y cachean pero no se exponen como tool (no existe todavía un mapeo cliente-de-Slack → `tenantId` en el codebase; construir esa tool sin eso arriesgaría mezclar datos de un tenant en la conversación de otro). Nueva carpeta `src/integrations/redtec-realtime/` (ver árbol arriba):
+  - **Principio de diseño**: nada de leer el socket "en vivo" al momento de responder una pregunta ni mantener el único estado en memoria — todo lo que empuja el socket se persiste en Mongo apenas llega (`platform_metrics`, TTL 7 días; `platform_events`, sin lectura expuesta todavía) y la tool consulta Mongo con filtros de tiempo. Así no se pierde nada entre redeploys de Coolify ni queda un estado de proceso poco confiable.
+  - **Tool nueva `estado_de_la_plataforma`** (`agent/tools/platform-health.ts`): argumento opcional `sinceMinutes` — sin él devuelve la última foto conocida (CPU/mem/disco); con él agrega picos sobre esa ventana ("¿cómo estuvo el sistema en la última hora?"). Registrada en `agent/tools/index.ts`, mencionada en `agent/prompt.ts`.
+  - **Logs crudos de contenedor restringidos a propósito**: `container-logs.ts` implementa `requestContainerLogs()` (con allow-list de nombre de contenedor del lado cliente, además del que ya hace el servidor) pero **no está conectada a ninguna tool del agente** — un log crudo puede traer stack traces, IPs internas o datos de otro tenant, y exponerlo a un LLM en conversación con un cliente externo es un vector de fuga de datos. Queda como utilidad interna para uso manual/futuro.
+  - `client.ts`: conexión `socket.io-client` singleton, deliberadamente **no bloqueante** — si `REDTEC_PLATFORM_WS_URL`/`REDTEC_PLATFORM_WS_SECRET` no están seteadas (ver "Pendientes" abajo), loguea y no conecta, el resto del bot sigue funcionando igual. Wireada en `bot.ts` junto al resto del calentamiento de boot/shutdown.
+  - Type-check limpio, 8 tests nuevos (52/52 en total). **Sin deployar/probar en vivo todavía** — depende de que RedTec confirme URL y secreto reales (ver Pendientes).
+
 ## Plan pendiente: debounce/cola de mensajes con Redis + KB vectorizada en Mongo Atlas (iniciado 2026-08-03)
 
 Decisión de Jorge (2026-08-03): la KB va a vivir vectorizada en MongoDB Atlas, y hace falta Redis en el VPS para debounce/cola de mensajes multi-línea (pensando en WhatsApp y otros canales de mensajería, donde un cliente manda varios mensajes seguidos que hoy dispararían varias llamadas paralelas a `askDaniel`). Orden acordado: **primero el debounce/cola (bloqueante para WhatsApp), después la KB vectorizada** (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo).
@@ -306,9 +320,16 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 
 5. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
 
+6. **Bloqueante para activar el WebSocket de tiempo real de RedTec (ver "Estado actual" arriba, 2026-08-06): falta que RedTec confirme dos datos.**
+   - La URL real del dominio de la plataforma (`REDTEC_PLATFORM_WS_URL` — la guía usa un placeholder).
+   - El nombre real de la variable del secreto: la guía de RedTec es inconsistente — el texto dice que es la misma que ya usa el webhook de superadmin (`SUPPORT_AGENT_WEBHOOK_SECRET`), pero el código de ejemplo usa `REDTEC_PLATFORM_WS_SECRET`. Confirmar con RedTec antes de cargar un valor real en Coolify (hoy el código usa `REDTEC_PLATFORM_WS_SECRET`).
+   - Una vez confirmados: cargar ambas en Coolify, redeploy, confirmar en logs "Realtime de RedTec conectado", confirmar por query directa a Mongo que `platform_metrics` recibe un doc nuevo cada ~30s, y probar en Slack "¿está funcionando el sistema?" / "¿cómo estuvo en la última hora?".
+
+7. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
+
 ## Referencia rápida del stack
 
-Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (44 tests, 11 archivos) · Test E2E automatizado (`npm run test:e2e`).
+Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + métricas/eventos del WebSocket de RedTec) · WebSocket de tiempo real de RedTec Realstate vía `socket.io-client` (sin deployar todavía, ver Pendientes) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (52 tests, 14 archivos) · Test E2E automatizado (`npm run test:e2e`).
 
 **Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — no hizo falta porque todo el tráfico entra por Slack Socket Mode, que no necesita servidor HTTP. Va a hacer falta recién con el widget web (canal #2 del roadmap).
 

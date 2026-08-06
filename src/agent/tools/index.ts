@@ -1,5 +1,6 @@
 import { searchFaqsTool } from "./search-faqs.js";
 import { lookupCustomerTool } from "./lookup-customer.js";
+import { platformHealthTool } from "./platform-health.js";
 import { createEscalateToMondayTool } from "./escalate-to-monday.js";
 import type { TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
 
@@ -10,10 +11,15 @@ export function buildToolsByName(
   effectiveDraft: TicketDraftFields,
   onTicketCreated?: () => void,
 ): Record<string, any> {
-  const tools = [searchFaqsTool, lookupCustomerTool, createEscalateToMondayTool(slackUserId, effectiveDraft, onTicketCreated)];
+  const tools = [
+    searchFaqsTool,
+    lookupCustomerTool,
+    platformHealthTool,
+    createEscalateToMondayTool(slackUserId, effectiveDraft, onTicketCreated),
+  ];
   return Object.fromEntries(tools.map((t) => [t.name, t]));
 }
 
 // Solo para bindTools() en model.ts: el modelo necesita nombre/descripción/schema de cada
 // tool para el function-calling, no la implementación — slackUserId/draft acá son irrelevantes.
-export const tools = [searchFaqsTool, lookupCustomerTool, createEscalateToMondayTool("__schema_binding__", {})];
+export const tools = [searchFaqsTool, lookupCustomerTool, platformHealthTool, createEscalateToMondayTool("__schema_binding__", {})];

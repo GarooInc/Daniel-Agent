@@ -22,4 +22,11 @@ export const env = {
   mongodbUri: process.env.MONGODB_URI,
   mongodbDbName: process.env.MONGODB_DB_NAME || "daniel",
   redisUrl: process.env.REDIS_URL,
+  // Opcionales a propósito (no van en REQUIRED_ENV_VARS): el bot tiene que arrancar igual sin
+  // esto. RedTec todavía no confirmó la URL real de su plataforma, y su guía es inconsistente
+  // sobre el nombre del secreto (dice SUPPORT_AGENT_WEBHOOK_SECRET en el texto pero
+  // REDTEC_PLATFORM_WS_SECRET en el código de ejemplo) — confirmar antes de cargar un valor
+  // real. Ver integrations/redtec-realtime/client.ts.
+  redtecRealtimeUrl: process.env.REDTEC_PLATFORM_WS_URL,
+  redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET,
 };
