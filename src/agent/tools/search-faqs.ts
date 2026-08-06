@@ -7,14 +7,19 @@ import { logger } from "../../config/logger.js";
 
 // Umbral de relevancia mínimo (vectorSearchScore de Atlas, cosine, 0 a 1) para no devolverle
 // al modelo una FAQ que "parece" relacionada por similitud pero en realidad no responde la
-// consulta — mejor decir "no encontré nada" que forzar un match débil. Valor inicial sin
-// calibrar contra uso real todavía; ajustar si en producción se ve que descarta FAQs válidas
-// o, al revés, deja pasar FAQs que no aplican.
-const MIN_SCORE = 0.75;
+// consulta — mejor decir "no encontré nada" que forzar un match débil. Calibrado en vivo
+// (2026-08-06): con el prefijo de producto (ver abajo), un match real da ~0.76-0.83 y una
+// consulta irrelevante no pasa de ~0.68 — 0.72 deja margen de sobra de los dos lados.
+const MIN_SCORE = 0.72;
 
 export const searchFaqsTool = tool(
   async ({ query, producto }) => {
-    const queryEmbedding = await embedText(query);
+    // Bug real en vivo (2026-08-06): el modelo suele omitir el nombre del producto en `query`
+    // porque ya lo manda separado en `producto` — pero el texto embebido de cada FAQ SÍ lo
+    // menciona (la pregunta dice "...Isabella..."), así que esa asimetría le restaba score real
+    // a un match correcto (0.72 en vez de 0.77 con este prefijo) sin que el match fuera peor.
+    const textoAEmbeber = producto ? `${producto}: ${query}` : query;
+    const queryEmbedding = await embedText(textoAEmbeber);
     const results = await searchFaqsBySimilarity(queryEmbedding, { producto, limit: 5 });
     const relevantes = results.filter((r) => r.score >= MIN_SCORE);
 
@@ -23,7 +28,7 @@ export const searchFaqsTool = tool(
     // modelo de verdad, y qué scores obtuvo, antes de decidir si es un bug de código o de
     // disciplina del modelo. Sacar una vez confirmado. Ver ESTADO-PROYECTO.md.
     logger.info(
-      { query, producto, scores: results.map((r) => ({ id: r.id, score: r.score })), relevantesCount: relevantes.length },
+      { query, producto, textoAEmbeber, scores: results.map((r) => ({ id: r.id, score: r.score })), relevantesCount: relevantes.length },
       "DEBUG buscar_faqs",
     );
 
