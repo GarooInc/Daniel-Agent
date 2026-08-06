@@ -4,6 +4,7 @@ import { logger } from "../../config/logger.js";
 import { registerMessageHandler, handleResolvedMessage } from "./message-handler.js";
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
+import { getDb } from "../../integrations/mongo/client.js";
 
 const { App } = bolt;
 
@@ -34,6 +35,19 @@ export async function startSlackBot(): Promise<void> {
 
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  // Calentamiento de Mongo ANTES de aceptar mensajes de Slack — bug real en vivo (2026-08-06):
+  // sin esto, la primera conexión a Mongo (lazy, recién se dispara con el primer mensaje real)
+  // corría la carrera contra el timeout de selección del replica set en un contenedor recién
+  // arrancado, y el primer cliente después de cada redeploy se comía el fallo. Si igual falla acá
+  // (ver también el serverSelectionTimeoutMS más largo en client.ts), no se aborta el arranque —
+  // sigue funcionando el reintento en el próximo getDb() (client.ts ya lo soporta).
+  try {
+    await getDb();
+    logger.info("Mongo conectado (calentamiento ok)");
+  } catch (err) {
+    logger.error({ err }, "No se pudo calentar la conexión a Mongo al arrancar — se reintentará en el próximo mensaje");
+  }
 
   await app.start();
   logger.info("⚡️ Daniel está corriendo (Slack Socket Mode)");

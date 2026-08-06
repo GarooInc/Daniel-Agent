@@ -8,7 +8,14 @@ export function getDb(): Promise<Db> {
   if (!dbPromise) {
     dbPromise = (async () => {
       try {
-        client = new MongoClient(env.mongodbUri ?? "");
+        // serverSelectionTimeoutMS más largo que el default (30s) — bug real en vivo
+        // (2026-08-06): el primer mensaje de un cliente después de cada redeploy fallaba con
+        // "Server selection timed out after 30000 ms" (el driver no llegaba a descubrir el
+        // primary del replica set a tiempo en un contenedor recién arrancado), tumbando toda
+        // la respuesta y disparando una auto-escalación con datos genéricos. Ver también el
+        // "calentamiento" en bot.ts, que llama a getDb() al arrancar para que ese costo lo
+        // pague el arranque del contenedor, no el primer cliente real.
+        client = new MongoClient(env.mongodbUri ?? "", { serverSelectionTimeoutMS: 45_000 });
         await client.connect();
         const db = client.db(env.mongodbDbName);
         await db.collection("chat_histories").createIndex({ slackUserId: 1 }, { unique: true });
