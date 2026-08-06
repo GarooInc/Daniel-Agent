@@ -3,6 +3,7 @@ import { z } from "zod";
 import { embedText } from "../../integrations/embeddings/openrouter-embeddings.js";
 import { searchFaqsBySimilarity } from "../../integrations/mongo/documents.js";
 import { PRODUCTO_VALUES } from "../../integrations/monday/create-ticket.js";
+import { logger } from "../../config/logger.js";
 
 // Umbral de relevancia mínimo (vectorSearchScore de Atlas, cosine, 0 a 1) para no devolverle
 // al modelo una FAQ que "parece" relacionada por similitud pero en realidad no responde la
@@ -16,6 +17,15 @@ export const searchFaqsTool = tool(
     const queryEmbedding = await embedText(query);
     const results = await searchFaqsBySimilarity(queryEmbedding, { producto, limit: 5 });
     const relevantes = results.filter((r) => r.score >= MIN_SCORE);
+
+    // DEBUG temporal (2026-08-06): diagnosticar por qué buscar_faqs no encontró una FAQ que
+    // por script sí matcheaba con score alto — para ver con qué query/producto llama el
+    // modelo de verdad, y qué scores obtuvo, antes de decidir si es un bug de código o de
+    // disciplina del modelo. Sacar una vez confirmado. Ver ESTADO-PROYECTO.md.
+    logger.info(
+      { query, producto, scores: results.map((r) => ({ id: r.id, score: r.score })), relevantesCount: relevantes.length },
+      "DEBUG buscar_faqs",
+    );
 
     if (relevantes.length === 0) return "No se encontraron FAQs relacionadas.";
     return relevantes.map((faq) => `[${faq.producto}] P: ${faq.pregunta}\nR: ${faq.respuesta}`).join("\n\n");
