@@ -94,9 +94,14 @@ src/
   data/
     faqs.json
     customers.json
+
+plans/                    # planes de features grandes (Markdown), commiteados al repo
+  2026-08-06-redtec-realtime-websocket.md
 ```
 
 Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo canal (web widget, WhatsApp) → una carpeta nueva en `channels/`; nueva integración externa (CRM, etc.) → una carpeta nueva en `integrations/`; nueva fuente de datos real → reemplazar la implementación en `knowledge-base/` sin tocar el resto.
+
+**Convención de `plans/` (2026-08-06)**: el plan que arma Claude Code en modo plan (`ExitPlanMode`) solo queda por defecto en `~/.claude/plans/` de la máquina donde se corrió — no viaja con el repo. Para que un plan de una feature grande se pueda retomar/consultar desde cualquier otra PC (no solo la que lo escribió), se copia a `plans/<fecha>-<nombre-corto>.md` en el repo y se commitea junto con el código. No hace falta para cambios chicos — solo para features con diseño/discusión que valga la pena preservar.
 
 ## Estado actual (construido y verificado)
 
