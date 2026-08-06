@@ -208,8 +208,23 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 
 - **Importante, todavía por confirmar una vez que el debounce ande bien**: con este cambio, hasta un mensaje único ahora tarda ~10s más en responder (pasa siempre por el debounce, no solo cuando hay ráfaga) — confirmar que ese delay es aceptable en uso real, o bajarlo.
 
-### Paso 5 (después del debounce) — KB vectorizada en Mongo Atlas
-- Todavía sin diseñar en detalle. Alcance acordado: migrar los 16 FAQs de `data/faqs.json` y los 7 clientes de `data/customers.json` a una colección con embeddings + Atlas Vector Search, reemplazando el keyword-match actual de `knowledge-base/faqs.ts` por similarity search. Requiere elegir modelo de embeddings (vía OpenRouter o directo) y crear el Vector Search Index en Atlas. Diseñar cuando se retome este punto.
+### Paso 5 — KB vectorizada en Mongo Atlas (HECHO, 2026-08-06, solo FAQs — customers.json queda para después)
+
+Diseño calcado de un patrón ya probado en otro proyecto de RedTec/Spectrum (`Centralizado.documents`, 200 documentos reales en producción, otro cluster de Atlas al que Jorge dio acceso puntual para inspeccionar el schema): vector search **clásico** (embedding pre-calculado, no Auto-Embed de Atlas), 1536 dimensiones, similarity `cosine`, con un campo de filtro pre-vector-search. Se descartó vectorizar `customers.json` — un lookup de cliente por email exacto no se beneficia de similarity search, se deja para una migración simple a colección Mongo plana más adelante.
+
+- **Embeddings vía OpenRouter** (`src/integrations/embeddings/openrouter-embeddings.ts`): `openai/text-embedding-3-small` a través de `https://openrouter.ai/api/v1/embeddings` — mismo modelo/dimensión (1536) que ya usa Centralizado, y reusa `OPENROUTER_API_KEY` existente sin sumar una credencial nueva. `embedTexts()` acepta batch (la migración embebe las 16 FAQs en una sola llamada).
+- **Colección `documents`** (`src/integrations/mongo/documents.ts`, DB `DanielSoporte`): `upsertFaqDocument()` (upsert por `id`, idempotente), `ensureFaqVectorIndex()` (crea el índice `faq_vector_index` si no existe — campo vector `embedding`, 1536 dims, cosine; campo de filtro `producto`, equivalente al `proyecto` de Centralizado), `searchFaqsBySimilarity()` ($vectorSearch + proyección con `score: { $meta: "vectorSearchScore" } }`).
+- **Script de migración** (`src/migrate-faqs.ts`, `npm run migrate:faqs`): lee `getAllFaqs()`, embebe, upsertea, crea el índice. Idempotente — se puede correr de nuevo si se edita `faqs.json`.
+- **`agent/tools/search-faqs.ts` reemplazada**: ya no usa el keyword-match viejo — embebe la consulta del cliente, busca por similitud (con `producto` opcional como pre-filtro), y descarta resultados con `score < 0.75` (umbral sin calibrar contra uso real todavía — ajustar si en producción deja pasar FAQs que no aplican o descarta FAQs válidas). El keyword-match viejo (`searchFaqs`, `getFaqsByProducto` en `knowledge-base/faqs.ts`) se borró por completo — quedó sin ningún caller una vez reemplazado; `getAllFaqs()` se mantiene, ahora solo la usa el script de migración.
+- `client.ts` (Mongo): se agregó `closeMongo()` — necesario para que el script de migración (y otros scripts de un solo uso) puedan cerrar la conexión y dejar que el proceso termine solo; el bot en producción nunca la llama.
+
+**Probado end-to-end en producción (2026-08-06)**: corrida real de `npm run migrate:faqs` contra `DanielSoporte` (16/16 FAQs embebidas e insertadas, índice quedó `READY` casi al instante). Prueba de similitud real: la consulta *"no logro que Isabella me proponga horarios para juntarme con un cliente"* (sin compartir ninguna palabra clave con la FAQ) encontró correctamente *"¿Cómo agenda una cita Isabella con un lead?"* como resultado con más score (0.79) — confirma que es similarity search real, no keyword-match disfrazado.
+
+Type-check limpio, 44/44 tests verdes (search-faqs.test.ts reescrito con mocks de `embedText`/`searchFaqsBySimilarity` en vez de llamar la API real).
+
+**Nota técnica**: la migración se corrió desde esta máquina usando el workaround de DNS-over-HTTPS ya documentado (esta máquina específica no resuelve `mongodb+srv://` directo) — no hizo falta tocar `client.ts` ni el código de producción para eso, solo se sobreescribió `MONGODB_URI` en el shell al invocar el script puntualmente. En producción (Coolify) `mongodb+srv://` resuelve normal.
+
+**Pendiente**: pushear el código (todavía sin confirmar con Jorge) y, en algún momento futuro, migrar `customers.json` a una colección Mongo plana (sin vectores).
 
 ## Hallazgo mayor (2026-08-04, sesión noche): instancia fantasma respondiendo en paralelo a producción
 
@@ -285,11 +300,12 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
    - **Pendiente (seguridad, no bloqueante)**: re-restringir la regla SSH (puerto 22) a una IP específica.
 
 6. **Debounce/cola de mensajes con Redis — HECHO y confirmado en vivo (2026-08-03/04).** Ver el detalle completo (4 bugs de infra/código encontrados y arreglados, más el diagnóstico final de que "3 respuestas separadas" era timing de la prueba manual, no un bug) en "Paso 4 — Probar en vivo" dentro de "Plan pendiente" más arriba en este archivo. `DEBOUNCE_MS = 10000` en producción, logging de debug temporal ya removido de los 3 archivos donde se había agregado.
-   - Después de esto: KB vectorizada en Mongo Atlas (Paso 5, migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo — diseño todavía sin definir).
+
+7. **KB vectorizada en Mongo Atlas — HECHO para FAQs, confirmado end-to-end (2026-08-06)** — ver "Paso 5" arriba para el detalle completo (schema calcado de `Centralizado.documents`, embeddings vía OpenRouter, migración corrida en producción, búsqueda semántica probada con una consulta sin keywords compartidas). **Pendiente**: pushear el código (sin confirmar todavía), probar `buscar_faqs` end-to-end desde Slack en vivo (esta sesión solo probó la búsqueda por script, no a través del agente completo), y migrar `customers.json` a una colección Mongo plana (sin vectores) en algún momento futuro.
 
 ## Referencia rápida del stack
 
-Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (35 tests, 9 archivos) · Test E2E automatizado (`npm run test:e2e`).
+Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest · Test E2E automatizado (`npm run test:e2e`).
 
 **Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — no hizo falta porque todo el tráfico entra por Slack Socket Mode, que no necesita servidor HTTP. Va a hacer falta recién con el widget web (canal #2 del roadmap).
 
