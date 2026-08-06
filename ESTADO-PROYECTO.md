@@ -315,22 +315,24 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
 
 Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo"). Lo que queda realmente abierto hoy:
 
-1. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba.
+1. **La integración realtime (ver "Estado actual" arriba) vive en la rama `feat/redtec-realtime-websocket`, con 2 commits, todavía NO pusheada a GitHub ni mergeada a `main`.** Si se retoma este trabajo desde otra máquina, hay que traer esta rama explícitamente (`git fetch` + `git checkout feat/redtec-realtime-websocket`) — un `git pull` en `main` no la va a traer. Falta decidir cuándo pushear/mergear (probablemente cuando RedTec confirme los datos del punto 7, aunque el código ya es seguro de mergear antes: no rompe nada si esas credenciales no están configuradas).
 
-2. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
+2. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba.
 
-3. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba).
+3. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
 
-4. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
+4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba).
 
-5. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
+5. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
 
-6. **Bloqueante para activar el WebSocket de tiempo real de RedTec (ver "Estado actual" arriba, 2026-08-06): falta que RedTec confirme dos datos.**
+6. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
+
+7. **Bloqueante para activar el WebSocket de tiempo real de RedTec (ver "Estado actual" arriba, 2026-08-06): falta que RedTec confirme dos datos.**
    - La URL real del dominio de la plataforma (`REDTEC_PLATFORM_WS_URL` — la guía usa un placeholder).
    - El nombre real de la variable del secreto: la guía de RedTec es inconsistente — el texto dice que es la misma que ya usa el webhook de superadmin (`SUPPORT_AGENT_WEBHOOK_SECRET`), pero el código de ejemplo usa `REDTEC_PLATFORM_WS_SECRET`. Confirmar con RedTec antes de cargar un valor real en Coolify (hoy el código usa `REDTEC_PLATFORM_WS_SECRET`).
    - Una vez confirmados: cargar ambas en Coolify, redeploy, confirmar en logs "Realtime de RedTec conectado", confirmar por query directa a Mongo que `platform_metrics` recibe un doc nuevo cada ~30s, y probar en Slack "¿está funcionando el sistema?" / "¿cómo estuvo en la última hora?".
 
-7. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
+8. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
 
 ## Referencia rápida del stack
 
