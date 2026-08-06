@@ -8,7 +8,13 @@ import type { TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import type { StoredMessage } from "../integrations/mongo/conversation-memory.js";
 
 const ExtractionSchema = z.object({
-  nombreCliente: z.string().optional().describe("Nombre completo del cliente, solo si lo dijo explícitamente en la conversación"),
+  nombreCliente: z
+    .string()
+    .optional()
+    .describe(
+      "Nombre completo del cliente, solo si lo dijo explícitamente presentándose (ej. 'me llamo...', 'soy...'). " +
+        "NUNCA un nombre de producto de RedTec (Isabella, Sofi, Widget-chatbot) mencionado en la consulta — eso va en el campo `producto`, no acá.",
+    ),
   email: z.string().optional().describe("Email del cliente, solo si lo dijo explícitamente en la conversación"),
   resumen: z.string().optional().describe("Resumen breve y claro del problema o consulta, si se puede armar con lo que dijo"),
   urgencia: z
@@ -25,6 +31,11 @@ const extractionModel = new ChatOpenAI({
   apiKey: env.openRouterApiKey,
   configuration: { baseURL: "https://openrouter.ai/api/v1" },
 }).withStructuredOutput(ExtractionSchema);
+
+// Separado de extractTicketFields para poder testearlo sin mockear el LLM.
+export function esNombreDeProducto(nombreCliente: string | undefined): boolean {
+  return PRODUCTO_VALUES.some((producto) => producto.toLowerCase() === nombreCliente?.trim().toLowerCase());
+}
 
 const EXTRACTION_PROMPT =
   "Analizá esta conversación de soporte entre un cliente y Daniel (agente de RedTec) y extraé SOLO los datos " +
@@ -43,7 +54,20 @@ export async function extractTicketFields(history: StoredMessage[], currentMessa
   );
 
   try {
-    return await extractionModel.invoke(EXTRACTION_PROMPT + transcript);
+    const extracted = await extractionModel.invoke(EXTRACTION_PROMPT + transcript);
+
+    // Red de seguridad además del prompt: bug real en vivo (2026-08-05) — el modelo extrajo
+    // nombreCliente="Sofi" de "...dar de alta un cliente en Sofi", confundiendo el producto
+    // mencionado con el nombre de la persona. Como el borrador extraído tiene prioridad sobre
+    // el perfil guardado (mergeTicketFields), ese valor incorrecto tapó el nombre real y
+    // terminó persistido para siempre en el perfil del cliente al crear el ticket. Si el
+    // nombre extraído coincide exactamente con un producto, se descarta.
+    if (esNombreDeProducto(extracted.nombreCliente)) {
+      logger.warn({ nombreCliente: extracted.nombreCliente }, "Extracción descartada: coincide con un nombre de producto, no con el del cliente");
+      return { ...extracted, nombreCliente: undefined };
+    }
+
+    return extracted;
   } catch (error) {
     logger.warn({ err: error }, "Falló la extracción automática de datos del ticket");
     return {};
