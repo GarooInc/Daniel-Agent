@@ -3,6 +3,7 @@ import type { WebClient } from "@slack/web-api";
 import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { bufferMessage } from "../../messaging/debounce-queue.js";
+import { toSlackMrkdwn } from "./format.js";
 import { logger } from "../../config/logger.js";
 
 const PROCESSED_EVENT_TTL_MS = 60_000;
@@ -30,7 +31,7 @@ export async function handleResolvedMessage(
 ): Promise<void> {
   try {
     const respuesta = await askDaniel(texto, slackUserId);
-    await respond(respuesta);
+    await respond(toSlackMrkdwn(respuesta));
   } catch (error) {
     logger.error({ err: error, slackUserId }, "Error al consultar a Daniel");
 
