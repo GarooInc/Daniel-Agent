@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-06
+Última actualización: 2026-08-11
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -28,6 +28,7 @@ Todas ya generadas y en uso — ver `.env.example` para la plantilla. Si necesit
 - `SLACK_ESCALATION_CHANNEL` (opcional, default `escalacion` — nombre del canal donde Daniel avisa cada ticket creado)
 - `MONDAY_API_TOKEN`
 - `MONGODB_URI` (nuevo 2026-07-30, requerido para la memoria de conversación — MongoDB Atlas, cluster `Cluster0` — ver sección de memoria abajo) y `MONGODB_DB_NAME` (default `daniel`; en producción se usa `DanielSoporte`, el nombre real de la BD creada en Atlas)
+- `WEBHOOK_PORT` (opcional, default `3300`) y `WEBHOOK_SECRET` (opcional — si no se setea, el webhook de abajo queda sin autenticar; nuevo 2026-08-11, ver sección del webhook)
 
 **Estado de esta máquina específica** (checkout de Windows usado en la sesión del 2026-07-30): tiene `OPENROUTER_API_KEY` y `MONDAY_API_TOKEN` reales cargados en `.env` para poder probar `askDaniel` suelto por consola (`npm run dev:agent`). **`MONGODB_URI` (`mongodb+srv://...`) no resuelve directo desde esta máquina**: la consulta DNS del registro SRV (`_mongodb._tcp....`) da `ETIMEOUT` incluso probando con resolvers alternativos (`8.8.8.8`/`1.1.1.1`) — la red de esta máquina bloquea las consultas DNS SRV por UDP normal, no es un problema del resolver configurado. **Workaround que sí funciona**: resolver el SRV y el TXT (opciones de conexión) manualmente vía DNS-over-HTTPS (`https://cloudflare-dns.com/dns-query?name=...&type=SRV`, funciona porque va sobre HTTPS/443 en vez de UDP/53) y armar a mano un connection string estándar no-SRV (`mongodb://user:pass@host1:27017,host2:27017,host3:27017/?ssl=true&replicaSet=...&authSource=admin`) con esos datos — probado y funciona (usado el 2026-07-30 noche para confirmar el estado real de `chat_histories`/`ticket_drafts`, ver Pendientes). El MCP de MongoDB Atlas conectado a esta sesión de Claude Code sufre el mismo bloqueo y no sirve como atajo.
 
@@ -70,6 +71,9 @@ src/
       bot.ts
       message-handler.ts
       index.ts
+    webhook/                # nuevo 2026-08-11: entrada HTTP genérica (no Slack), ver más abajo
+      server.ts
+      index.ts
 
   integrations/           # servicios externos a los que Daniel llama (no clientes hablándole a él)
     monday/
@@ -82,6 +86,7 @@ src/
       conversation-memory.ts    # chat_histories: historial por usuario de Slack
       customer-profile.ts        # users: nombre/email persistente por usuario
       ticket-draft.ts              # ticket_drafts: borrador de ticket en construcción
+      webhook-events.ts             # webhook_raw_events: payloads crudos del webhook, ver abajo
     slack/
       notify-escalation.ts     # avisa cada ticket creado en el canal #escalacion
 
@@ -146,6 +151,17 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
 **Nota de red de esta máquina**: el fetch nativo de Node (`undici`) tiene timeouts intermitentes (`ETIMEDOUT`) contra hosts externos (pasó con `registry.npmjs.org`, `api.monday.com` y hasta `openrouter.ai`) que `curl` no sufre — parece un problema de resolución/preferencia IPv6 en esta máquina. Si el bot corriendo en otra máquina tiene llamadas que cuelgan o tardan mucho, probar arrancándolo con `NODE_OPTIONS="--dns-result-order=ipv4first" npm run dev:slack` antes de asumir que es un bug de la app.
 
 **Conector MCP de Monday.com disponible (sin usar todavía)**: apareció un conector `claude.ai monday.com` (requiere autenticar corriendo `/mcp` y eligiéndolo de la lista) que no existía cuando se definió el stack original. La integración ya construida (`src/integrations/monday/`) usa la API GraphQL directa y está probada — el MCP no la reemplazó, pero queda como opción para inspeccionar el tablero interactivamente sin escribir queries a mano.
+
+- [x] **Webhook HTTP genérico para recibir datos internos de otros agentes/la empresa (2026-08-11, commit `b31bb96`)**: primer endpoint HTTP real de este proyecto — hasta ahora todo el tráfico entraba por Slack Socket Mode, sin servidor HTTP. `POST /webhook/internal`, servido con `node:http` nativo (no se sumó Express — decisión deliberada, ver nota en "Referencia rápida del stack" abajo), en el mismo proceso que el bot de Slack (arranca/cierra junto a `startSlackBot()` en `channels/slack/bot.ts`). No se conoce todavía la estructura real de lo que va a llegar (viene de otros agentes de RedTec y sistemas internos de la empresa), así que el diseño es deliberadamente "capturar todo crudo, no asumir schema":
+  - Loguea con `pino` el body completo (headers + payload, parseado como JSON si se puede) de cada request.
+  - Guarda cada evento crudo en Mongo, colección `webhook_raw_events` (`integrations/mongo/webhook-events.ts`) — para poder revisarlos con calma y definir el schema real más adelante, no solo en logs efímeros.
+  - Responde `200 {"ok":true}` siempre, incluso si falla el guardado en Mongo (no bloquea al emisor) — el log ya capturó el dato como respaldo.
+  - `404` fuera de la ruta, `405` si no es POST, `413` si el body pasa 5MB.
+  - Autenticación opcional por header `x-webhook-secret` contra `WEBHOOK_SECRET` — si no está seteada, el endpoint queda abierto a propósito (fase exploratoria). Ya seteada en Coolify.
+  - **Puerto**: `WEBHOOK_PORT` (default `3300`), `EXPOSE 3300` agregado al `Dockerfile`.
+  - **Bug/gotcha real de infra encontrado en el primer deploy — 502 Bad Gateway**: el contenedor arrancaba perfecto (`Servidor de webhook escuchando... port: 3300` en los logs, Mongo/Redis/Slack conectados), pero el dominio (`bm6cobx1321sflq2l99qrsvu.82.29.180.111.sslip.io`, generado por Coolify meses atrás sin nunca usarse — el bot nunca necesitó HTTP) devolvía 502 en toda request. Causa: el campo **"Ports Exposes"** de Coolify (tab General → Network) tenía el default `3000` sin tocar, y las labels de Traefik/Caddy que Coolify autogenera (`loadbalancer.server.port=3000`, sección Labels, marcada "Readonly" porque se derivan de ese campo) apuntaban ahí — nada escuchaba en 3000, de ahí el Bad Gateway aunque la app estuviera sana. Fix: cambiar "Ports Exposes" a `3300` + Save + **Redeploy completo** (un simple Save no alcanza, hace falta redeployar para que Traefik regenere las labels). **Confirmado en vivo (2026-08-11)**: `curl` real contra el dominio da `404` en ruta desconocida, `401` sin `x-webhook-secret`, `200 {"ok":true}` con el secreto correcto.
+  - **Se intentó activar HTTPS en el dominio y Coolify lo bloqueó con un warning correcto**: los dominios `*.sslip.io` son compartidos entre muchos usuarios y Let's Encrypt les aplica rate-limiting agresivo — la validación del certificado iba a fallar. Se dejó en `http://` a propósito (ver Pendientes abajo, hace falta un dominio propio para HTTPS real).
+  - **Nota para la próxima vez que se expone un puerto nuevo en esta app en Coolify**: revisar el campo "Ports Exposes" explícitamente, no asumir que el `EXPOSE` del Dockerfile alcanza — es la causa más probable de un 502 con la app sana por dentro.
 ## Plan pendiente: debounce/cola de mensajes con Redis + KB vectorizada en Mongo Atlas (iniciado 2026-08-03)
 
 Decisión de Jorge (2026-08-03): la KB va a vivir vectorizada en MongoDB Atlas, y hace falta Redis en el VPS para debounce/cola de mensajes multi-línea (pensando en WhatsApp y otros canales de mensajería, donde un cliente manda varios mensajes seguidos que hoy dispararían varias llamadas paralelas a `askDaniel`). Orden acordado: **primero el debounce/cola (bloqueante para WhatsApp), después la KB vectorizada** (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo).
@@ -306,10 +322,14 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 
 5. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
 
+6. **Definir el schema real del webhook (`POST /webhook/internal`, ver arriba) una vez que lleguen los primeros datos reales del compañero/agente que los va a mandar** — hoy solo se capturan crudos (log + `webhook_raw_events` en Mongo) a propósito, sin ningún procesamiento. Falta decidir qué hacer con esos datos (¿alimentan una tool nueva? ¿un canal nuevo? ¿se re-emiten a otro lado?) una vez que se conozca la estructura y el propósito real.
+
+7. **Conseguir un dominio propio para HTTPS real en el webhook** — hoy corre en `http://` sobre el dominio `*.sslip.io` autogenerado por Coolify porque Let's Encrypt rate-limitea esos dominios compartidos (ver arriba). Mientras el tráfico sea interno y de bajo volumen no es bloqueante, pero si esto se vuelve permanente o crece en sensibilidad de los datos, conviene apuntar un subdominio propio (ej. de `garooinc.com`) al VPS.
+
 ## Referencia rápida del stack
 
-Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (44 tests, 11 archivos) · Test E2E automatizado (`npm run test:e2e`).
+Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Webhook HTTP genérico (`node:http` nativo) para datos internos · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + eventos crudos del webhook) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (44 tests, 11 archivos) · Test E2E automatizado (`npm run test:e2e`).
 
-**Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — no hizo falta porque todo el tráfico entra por Slack Socket Mode, que no necesita servidor HTTP. Va a hacer falta recién con el widget web (canal #2 del roadmap).
+**Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — el primer servidor HTTP real del proyecto (el webhook de arriba, 2026-08-11) se hizo con `node:http` nativo a propósito, porque solo necesitaba una ruta simple; Express sigue pendiente para cuando llegue el widget web (canal #2 del roadmap), que va a necesitar más rutas/middleware.
 
 Detalle completo de cada decisión y por qué se tomó: `NOTAS-INICIALES.md`.
