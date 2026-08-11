@@ -22,4 +22,8 @@ export const env = {
   mongodbUri: process.env.MONGODB_URI,
   mongodbDbName: process.env.MONGODB_DB_NAME || "daniel",
   redisUrl: process.env.REDIS_URL,
+  webhookPort: Number.parseInt(process.env.WEBHOOK_PORT || "3300", 10),
+  // Si no está seteado, el webhook queda abierto (sin validar remitente) — pensado para el
+  // arranque exploratorio mientras se descubre la estructura de los payloads que van a llegar.
+  webhookSecret: process.env.WEBHOOK_SECRET,
 };

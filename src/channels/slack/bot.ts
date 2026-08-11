@@ -5,6 +5,7 @@ import { registerMessageHandler, handleResolvedMessage } from "./message-handler
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getDb } from "../../integrations/mongo/client.js";
+import { startWebhookServer } from "../webhook/index.js";
 
 const { App } = bolt;
 
@@ -25,10 +26,13 @@ export async function startSlackBot(): Promise<void> {
     );
   });
 
+  const webhookServer = startWebhookServer();
+
   const shutdown = async (signal: NodeJS.Signals) => {
     logger.info({ signal }, "Cerrando Daniel...");
     await closeDebounceQueue(worker);
     await closeRedis();
+    webhookServer.close();
     await app.stop();
     process.exit(0);
   };
