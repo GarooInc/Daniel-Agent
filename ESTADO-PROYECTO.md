@@ -329,7 +329,11 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
 
 ## Pendientes / próximos pasos (en orden)
 
-Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo"). Lo que queda realmente abierto hoy:
+Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo").
+
+**Cerrado en la sesión del 2026-08-12** (detalle completo en cada punto numerado más abajo): CI con GitHub Actions (punto 9); diseño + migración real de `customers.json`+`users` a la colección unificada `customers` (punto 2), corrida contra producción sin ventana de downtime; TTL de 30 días agregado a `webhook_raw_events` (mismo punto 2); checkbox "Inject Build Args to Dockerfile" destildado en Coolify (punto 4); rotación completa del Bot Token de Slack, `xoxb-...` nuevo confirmado en vivo (punto 10); decisión consciente de no restringir SSH a una IP por el uso de VPN (punto 3).
+
+**Sigue realmente abierto**: la integración realtime de RedTec (punto 1, bloqueada en que RedTec confirme datos), el mapeo tenant↔cliente (punto 8), calibrar el umbral de FAQs con tráfico real (punto 6), confirmar que el fantasma no reaparece (punto 5), observabilidad de negocio y staging (punto 11), el Agente Técnico — diseñado, sin código (punto 12), el schema del webhook genérico (punto 13), y un dominio propio para el webhook (punto 14).
 
 **Evaluación estratégica (2026-08-12)**: `plans/2026-08-12-roadmap-premium-profesional.md` tiene el diagnóstico completo de qué falta para pasar de "v1 que funciona en dogfooding interno" a "producto premium confiable con clientes externos reales" (datos reales de KB/clientes, CI, observabilidad de negocio, staging, segundo canal, etc.), con prioridades y esfuerzo estimado. Los ítems de esa evaluación que ya estaban en esta lista se marcan abajo con referencia cruzada; los que son nuevos se agregaron como puntos 9-11.
 
@@ -360,7 +364,7 @@ También decidido el mismo día: convención estándar para datos que llegan de 
 
 9. **CI — HECHO (2026-08-12).** `.github/workflows/ci.yml` corre `npx tsc --noEmit` y `npm test` (52 tests) en cada push/PR a `main`, sin secrets (los tests ya mockean Mongo/OpenRouter/Monday). Confirmado en local antes de pushear: type-check limpio, 52/52 verdes. Push `37513b3`.
 
-10. **Seguridad, cabo suelto sin cerrar (nuevo, del roadmap): rotación del Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba)** — el App Token (Socket Mode) sí se roto y cortó al fantasma, pero "Reinstall to Workspace" no generó un Bot Token nuevo. Falta desinstalar la app del todo y reinstalar de cero para forzar un valor nuevo, o confirmar explícitamente que no hace falta.
+10. **Seguridad — HECHO (2026-08-12).** El Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba) porque "Reinstall to Workspace" no generaba un valor nuevo. Se desinstaló la app del todo y se reinstaló de cero, se cargó el `xoxb-...` nuevo en Coolify (`SLACK_BOT_TOKEN`) y se hizo Redeploy. Confirmado en vivo por Jorge tras el redeploy.
 
 11. **Madurez operativa faltante (nuevo, del roadmap, no bloqueante para seguir usando Daniel hoy pero sí para escalarlo con confianza)**: cero observabilidad de negocio (no hay forma de ver volumen de tickets/tasa de escalación/tiempo de respuesta sin queries manuales a Mongo) y no existe un ambiente de staging separado de producción — varios bugs serios de este documento (tickets duplicados, el fantasma, datos mezclados entre sesiones) se depuraron en vivo contra Slack/Monday reales. Detalle y opciones de esfuerzo en `plans/2026-08-12-roadmap-premium-profesional.md`, prioridad 1.
 
