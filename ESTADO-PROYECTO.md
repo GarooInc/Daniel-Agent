@@ -352,7 +352,7 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 
 8. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
 
-9. **CI faltante (nuevo, del roadmap): no hay `.github/workflows/`.** `npx tsc --noEmit` y `npm test` (44 tests) solo corren si alguien se acuerda de correrlos a mano antes de pushear — no hay gate automático en push/PR. No requiere secrets de producción (los tests ya mockean Mongo/OpenRouter/Monday). Esfuerzo chico (~medio día), alto impacto dado el historial de bugs de este proyecto.
+9. **CI — HECHO (2026-08-12).** `.github/workflows/ci.yml` corre `npx tsc --noEmit` y `npm test` (52 tests) en cada push/PR a `main`, sin secrets (los tests ya mockean Mongo/OpenRouter/Monday). Confirmado en local antes de pushear: type-check limpio, 52/52 verdes. Push `37513b3`.
 
 10. **Seguridad, cabo suelto sin cerrar (nuevo, del roadmap): rotación del Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba)** — el App Token (Socket Mode) sí se roto y cortó al fantasma, pero "Reinstall to Workspace" no generó un Bot Token nuevo. Falta desinstalar la app del todo y reinstalar de cero para forzar un valor nuevo, o confirmar explícitamente que no hace falta.
 
