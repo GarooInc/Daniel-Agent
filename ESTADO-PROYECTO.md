@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-11
+Última actualización: 2026-08-12
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -62,6 +62,7 @@ src/
     tools/
       search-faqs.ts
       lookup-customer.ts
+      platform-health.ts        # estado_de_la_plataforma: lee platform_metrics (Mongo), nunca el socket en vivo
       escalate-to-monday.ts
       ticket-fields.ts          # campos requeridos, merge compartido, labels
       index.ts
@@ -89,13 +90,25 @@ src/
       webhook-events.ts             # webhook_raw_events: payloads crudos del webhook, ver abajo
     slack/
       notify-escalation.ts     # avisa cada ticket creado en el canal #escalacion
+    redtec-realtime/          # WebSocket de tiempo real de RedTec Realstate (socket.io), ver abajo
+      client.ts                 # conexión singleton, no bloqueante si faltan credenciales
+      platform-metrics.ts        # persiste container.stats en Mongo (platform_metrics, TTL 7 días) + consultas por ventana
+      crm-events-cache.ts          # persiste lead.*/appointment.* en platform_events, sin lectura expuesta todavía
+      container-logs.ts             # utilidad interna para get_container_logs — NO conectada a ninguna tool
 
   data/
     faqs.json
     customers.json
+
+plans/                    # planes de features grandes (Markdown), commiteados al repo
+  2026-08-06-redtec-realtime-websocket.md
+  2026-08-12-roadmap-premium-profesional.md   # evaluación estratégica: qué falta para pasar de v1 a producto premium/profesional
+  2026-08-12-agente-tecnico-n8n-spectrum.md   # diseño (sin código todavía) de un segundo agente IA que audita n8n vía MCP y se comunica con Daniel por un canal de Slack compartido
 ```
 
 Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo canal (web widget, WhatsApp) → una carpeta nueva en `channels/`; nueva integración externa (CRM, etc.) → una carpeta nueva en `integrations/`; nueva fuente de datos real → reemplazar la implementación en `knowledge-base/` sin tocar el resto.
+
+**Convención de `plans/` (2026-08-06)**: el plan que arma Claude Code en modo plan (`ExitPlanMode`) solo queda por defecto en `~/.claude/plans/` de la máquina donde se corrió — no viaja con el repo. Para que un plan de una feature grande se pueda retomar/consultar desde cualquier otra PC (no solo la que lo escribió), se copia a `plans/<fecha>-<nombre-corto>.md` en el repo y se commitea junto con el código. No hace falta para cambios chicos — solo para features con diseño/discusión que valga la pena preservar.
 
 ## Estado actual (construido y verificado)
 
@@ -162,6 +175,12 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
   - **Bug/gotcha real de infra encontrado en el primer deploy — 502 Bad Gateway**: el contenedor arrancaba perfecto (`Servidor de webhook escuchando... port: 3300` en los logs, Mongo/Redis/Slack conectados), pero el dominio (`bm6cobx1321sflq2l99qrsvu.82.29.180.111.sslip.io`, generado por Coolify meses atrás sin nunca usarse — el bot nunca necesitó HTTP) devolvía 502 en toda request. Causa: el campo **"Ports Exposes"** de Coolify (tab General → Network) tenía el default `3000` sin tocar, y las labels de Traefik/Caddy que Coolify autogenera (`loadbalancer.server.port=3000`, sección Labels, marcada "Readonly" porque se derivan de ese campo) apuntaban ahí — nada escuchaba en 3000, de ahí el Bad Gateway aunque la app estuviera sana. Fix: cambiar "Ports Exposes" a `3300` + Save + **Redeploy completo** (un simple Save no alcanza, hace falta redeployar para que Traefik regenere las labels). **Confirmado en vivo (2026-08-11)**: `curl` real contra el dominio da `404` en ruta desconocida, `401` sin `x-webhook-secret`, `200 {"ok":true}` con el secreto correcto.
   - **Se intentó activar HTTPS en el dominio y Coolify lo bloqueó con un warning correcto**: los dominios `*.sslip.io` son compartidos entre muchos usuarios y Let's Encrypt les aplica rate-limiting agresivo — la validación del certificado iba a fallar. Se dejó en `http://` a propósito (ver Pendientes abajo, hace falta un dominio propio para HTTPS real).
   - **Nota para la próxima vez que se expone un puerto nuevo en esta app en Coolify**: revisar el campo "Ports Exposes" explícitamente, no asumir que el `EXPOSE` del Dockerfile alcanza — es la causa más probable de un 502 con la app sana por dentro.
+- [x] **WebSocket de tiempo real de RedTec Realstate — código completo, sin deployar todavía (2026-08-06, mergeado a `main` el 2026-08-12)**: RedTec expone un canal `socket.io` único de plataforma (`wss://<dominio>/realtime`, guía `realtime-websocket-guide.pdf`) con eventos de CRM (`lead.*`/`appointment.*`, con `tenantId`) y métricas de infra de sus 2 contenedores (`container.stats` cada 30s + `get_container_logs` bajo demanda). Alcance de esta primera pasada, decidido con Jorge: **solo infra por ahora** — los eventos de CRM se ingieren y cachean pero no se exponen como tool (no existe todavía un mapeo cliente-de-Slack → `tenantId` en el codebase; construir esa tool sin eso arriesgaría mezclar datos de un tenant en la conversación de otro). Nueva carpeta `src/integrations/redtec-realtime/` (ver árbol arriba):
+  - **Principio de diseño**: nada de leer el socket "en vivo" al momento de responder una pregunta ni mantener el único estado en memoria — todo lo que empuja el socket se persiste en Mongo apenas llega (`platform_metrics`, TTL 7 días; `platform_events`, sin lectura expuesta todavía) y la tool consulta Mongo con filtros de tiempo. Así no se pierde nada entre redeploys de Coolify ni queda un estado de proceso poco confiable.
+  - **Tool nueva `estado_de_la_plataforma`** (`agent/tools/platform-health.ts`): argumento opcional `sinceMinutes` — sin él devuelve la última foto conocida (CPU/mem/disco); con él agrega picos sobre esa ventana ("¿cómo estuvo el sistema en la última hora?"). Registrada en `agent/tools/index.ts`, mencionada en `agent/prompt.ts`.
+  - **Logs crudos de contenedor restringidos a propósito**: `container-logs.ts` implementa `requestContainerLogs()` (con allow-list de nombre de contenedor del lado cliente, además del que ya hace el servidor) pero **no está conectada a ninguna tool del agente** — un log crudo puede traer stack traces, IPs internas o datos de otro tenant, y exponerlo a un LLM en conversación con un cliente externo es un vector de fuga de datos. Queda como utilidad interna para uso manual/futuro.
+  - `client.ts`: conexión `socket.io-client` singleton, deliberadamente **no bloqueante** — si `REDTEC_PLATFORM_WS_URL`/`REDTEC_PLATFORM_WS_SECRET` no están seteadas (ver "Pendientes" abajo), loguea y no conecta, el resto del bot sigue funcionando igual. Wireada en `bot.ts` junto al resto del calentamiento de boot/shutdown.
+  - Type-check limpio, 8 tests nuevos (52/52 en total). **Sin deployar/probar en vivo todavía** — depende de que RedTec confirme URL y secreto reales (ver Pendientes).
 ## Plan pendiente: debounce/cola de mensajes con Redis + KB vectorizada en Mongo Atlas (iniciado 2026-08-03)
 
 Decisión de Jorge (2026-08-03): la KB va a vivir vectorizada en MongoDB Atlas, y hace falta Redis en el VPS para debounce/cola de mensajes multi-línea (pensando en WhatsApp y otros canales de mensajería, donde un cliente manda varios mensajes seguidos que hoy dispararían varias llamadas paralelas a `askDaniel`). Orden acordado: **primero el debounce/cola (bloqueante para WhatsApp), después la KB vectorizada** (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo).
@@ -312,23 +331,42 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
 
 Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo"). Lo que queda realmente abierto hoy:
 
-1. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba.
+**Evaluación estratégica (2026-08-12)**: `plans/2026-08-12-roadmap-premium-profesional.md` tiene el diagnóstico completo de qué falta para pasar de "v1 que funciona en dogfooding interno" a "producto premium confiable con clientes externos reales" (datos reales de KB/clientes, CI, observabilidad de negocio, staging, segundo canal, etc.), con prioridades y esfuerzo estimado. Los ítems de esa evaluación que ya estaban en esta lista se marcan abajo con referencia cruzada; los que son nuevos se agregaron como puntos 9-11.
 
-2. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
+1. **La integración realtime (ver "Estado actual" arriba) ya está mergeada a `main` (2026-08-12)** — antes vivía en la rama `feat/redtec-realtime-websocket` y había que traerla explícitamente (`git fetch` + `git checkout feat/redtec-realtime-websocket`); ahora ya no. Sigue **sin deployar/probar en vivo**: falta que RedTec confirme los datos del punto 7. El código es seguro en producción sin esas credenciales (no rompe nada si no están configuradas).
 
-3. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba).
+2. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba. Nota del roadmap (punto 1 de `plans/2026-08-12-roadmap-premium-profesional.md`): esta migración es solo la parte estructural — sigue pendiente, aparte, reemplazar el *contenido* (las 16 FAQs y los 7 clientes son todos de ejemplo, no datos reales de RedTec) antes de exponer Daniel a clientes externos reales.
 
-4. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
+3. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
 
-5. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
+4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba). Ver también punto 3 del roadmap (`plans/2026-08-12-roadmap-premium-profesional.md`).
 
-6. **Definir el schema real del webhook (`POST /webhook/internal`, ver arriba) una vez que lleguen los primeros datos reales del compañero/agente que los va a mandar** — hoy solo se capturan crudos (log + `webhook_raw_events` en Mongo) a propósito, sin ningún procesamiento. Falta decidir qué hacer con esos datos (¿alimentan una tool nueva? ¿un canal nuevo? ¿se re-emiten a otro lado?) una vez que se conozca la estructura y el propósito real.
+5. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
 
-7. **Conseguir un dominio propio para HTTPS real en el webhook** — hoy corre en `http://` sobre el dominio `*.sslip.io` autogenerado por Coolify porque Let's Encrypt rate-limitea esos dominios compartidos (ver arriba). Mientras el tráfico sea interno y de bajo volumen no es bloqueante, pero si esto se vuelve permanente o crece en sensibilidad de los datos, conviene apuntar un subdominio propio (ej. de `garooinc.com`) al VPS.
+6. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas. Depende de tener tráfico real primero (ver punto 1 del roadmap).
+
+7. **Bloqueante para activar el WebSocket de tiempo real de RedTec (ver "Estado actual" arriba, 2026-08-06): falta que RedTec confirme dos datos.**
+   - La URL real del dominio de la plataforma (`REDTEC_PLATFORM_WS_URL` — la guía usa un placeholder).
+   - El nombre real de la variable del secreto: la guía de RedTec es inconsistente — el texto dice que es la misma que ya usa el webhook de superadmin (`SUPPORT_AGENT_WEBHOOK_SECRET`), pero el código de ejemplo usa `REDTEC_PLATFORM_WS_SECRET`. Confirmar con RedTec antes de cargar un valor real en Coolify (hoy el código usa `REDTEC_PLATFORM_WS_SECRET`).
+   - Una vez confirmados: cargar ambas en Coolify, redeploy, confirmar en logs "Realtime de RedTec conectado", confirmar por query directa a Mongo que `platform_metrics` recibe un doc nuevo cada ~30s, y probar en Slack "¿está funcionando el sistema?" / "¿cómo estuvo en la última hora?".
+
+8. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
+
+9. **CI faltante (nuevo, del roadmap): no hay `.github/workflows/`.** `npx tsc --noEmit` y `npm test` (44 tests) solo corren si alguien se acuerda de correrlos a mano antes de pushear — no hay gate automático en push/PR. No requiere secrets de producción (los tests ya mockean Mongo/OpenRouter/Monday). Esfuerzo chico (~medio día), alto impacto dado el historial de bugs de este proyecto.
+
+10. **Seguridad, cabo suelto sin cerrar (nuevo, del roadmap): rotación del Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba)** — el App Token (Socket Mode) sí se roto y cortó al fantasma, pero "Reinstall to Workspace" no generó un Bot Token nuevo. Falta desinstalar la app del todo y reinstalar de cero para forzar un valor nuevo, o confirmar explícitamente que no hace falta.
+
+11. **Madurez operativa faltante (nuevo, del roadmap, no bloqueante para seguir usando Daniel hoy pero sí para escalarlo con confianza)**: cero observabilidad de negocio (no hay forma de ver volumen de tickets/tasa de escalación/tiempo de respuesta sin queries manuales a Mongo) y no existe un ambiente de staging separado de producción — varios bugs serios de este documento (tickets duplicados, el fantasma, datos mezclados entre sesiones) se depuraron en vivo contra Slack/Monday reales. Detalle y opciones de esfuerzo en `plans/2026-08-12-roadmap-premium-profesional.md`, prioridad 1.
+
+12. **Nueva iniciativa diseñada, sin código todavía: "Agente Técnico" para diagnosticar problemas de sistemas n8n de clientes (caso guía: Spectrum).** Idea de Jorge (2026-08-12): un segundo agente de IA, en un repo nuevo y separado (`Agente-Tecnico`), con acceso de solo lectura vía MCP (`n8n-mcp` + `@langchain/mcp-adapters`) a la instancia de n8n de un cliente, que vive en Slack junto a Daniel en un **canal compartido** visible para humanos. Flujo: Daniel menciona al agente técnico en ese canal describiendo el problema reportado por el cliente → el agente técnico audita n8n (workflows/ejecuciones/errores) y responde en el hilo → Daniel extrae el diagnóstico de forma estructurada y le contesta al cliente en la conversación original. Diseño completo (tools nuevas, esquema de Mongo para correlacionar la respuesta por `thread_ts`, estructura del repo nuevo, fases, estimación ~9-12 días) en `plans/2026-08-12-agente-tecnico-n8n-spectrum.md`. **Nada de esto está construido** — el próximo paso al retomar es empezar por el lado Daniel (tool `consultar_agente_tecnico` + persistencia del handoff), que no depende de que el repo del agente técnico exista todavía.
+
+13. **Definir el schema real del webhook (`POST /webhook/internal`, ver arriba) una vez que lleguen los primeros datos reales del compañero/agente que los va a mandar** — hoy solo se capturan crudos (log + `webhook_raw_events` en Mongo) a propósito, sin ningún procesamiento. Falta decidir qué hacer con esos datos (¿alimentan una tool nueva? ¿un canal nuevo? ¿se re-emiten a otro lado?) una vez que se conozca la estructura y el propósito real.
+
+14. **Conseguir un dominio propio para HTTPS real en el webhook** — hoy corre en `http://` sobre el dominio `*.sslip.io` autogenerado por Coolify porque Let's Encrypt rate-limitea esos dominios compartidos (ver arriba). Mientras el tráfico sea interno y de bajo volumen no es bloqueante, pero si esto se vuelve permanente o crece en sensibilidad de los datos, conviene apuntar un subdominio propio (ej. de `garooinc.com`) al VPS.
 
 ## Referencia rápida del stack
 
-Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Webhook HTTP genérico (`node:http` nativo) para datos internos · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + eventos crudos del webhook) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (44 tests, 11 archivos) · Test E2E automatizado (`npm run test:e2e`).
+Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Webhook HTTP genérico (`node:http` nativo) para datos internos · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + eventos crudos del webhook + métricas/eventos del WebSocket de RedTec) · WebSocket de tiempo real de RedTec Realstate vía `socket.io-client` (mergeado en `main`, sin deployar todavía, ver Pendientes) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (52 tests, 14 archivos) · Test E2E automatizado (`npm run test:e2e`).
 
 **Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — el primer servidor HTTP real del proyecto (el webhook de arriba, 2026-08-11) se hizo con `node:http` nativo a propósito, porque solo necesitaba una ruta simple; Express sigue pendiente para cuando llegue el widget web (canal #2 del roadmap), que va a necesitar más rutas/middleware.
 
