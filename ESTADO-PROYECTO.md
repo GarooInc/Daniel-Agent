@@ -343,7 +343,7 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 
 También decidido el mismo día: convención estándar para datos que llegan de sistemas externos (webhook genérico, RedTec realtime, futuros) — colección `<fuente>_raw` con TTL default de 30 días + colección tipada derivada recién cuando el schema se conoce, ver el mismo plan. **Aplicado (2026-08-12)**: `webhook_raw_events` ya tiene el índice TTL de 30 días (`ensureRetentionIndex()`, mismo patrón lazy que `platform-metrics.ts`) — antes crecía sin límite desde 2026-08-11. Type-check limpio, 52/52 tests verdes.
 
-3. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
+3. **Seguridad — decisión tomada (2026-08-12): dejar la regla SSH (puerto 22) abierta a cualquier IP, a propósito.** Jorge se conecta vía VPN, así que su IP de origen varía — restringir a una IP fija lo dejaría afuera del VPS. No es un pendiente, es una decisión consciente dado ese constraint. Si en el futuro se usa una VPN con IP de salida fija, reconsiderar.
 
 4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba). Ver también punto 3 del roadmap (`plans/2026-08-12-roadmap-premium-profesional.md`).
 
