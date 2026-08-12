@@ -19,7 +19,14 @@ export function getDb(): Promise<Db> {
         await client.connect();
         const db = client.db(env.mongodbDbName);
         await db.collection("chat_histories").createIndex({ slackUserId: 1 }, { unique: true });
-        await db.collection("users").createIndex({ slackUserId: 1 }, { unique: true });
+        // `customers` (antes `users`, ver plans/2026-08-12-estructura-datos-clientes-e-ingesta-externa.md):
+        // email es la clave canónica una vez conocida, pero no todo documento la tiene todavía
+        // (un cliente nuevo por Slack antes de dar su email) — sparse para no romper el índice
+        // único con múltiples documentos sin ese campo. slackUserId no es único a nivel de
+        // índice: customer-profile.ts se encarga de no dejar dos documentos con el mismo
+        // slackUserId cuando se resuelve por email.
+        await db.collection("customers").createIndex({ email: 1 }, { unique: true, sparse: true });
+        await db.collection("customers").createIndex({ slackUserId: 1 }, { sparse: true });
         await db.collection("ticket_drafts").createIndex({ slackUserId: 1 }, { unique: true });
         return db;
       } catch (error) {

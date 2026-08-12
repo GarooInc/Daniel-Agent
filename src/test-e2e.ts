@@ -24,7 +24,7 @@ import { SYSTEM_PROMPT } from "./agent/prompt.js";
 import { extractTicketFields } from "./agent/extract-ticket-fields.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./agent/tools/ticket-fields.js";
 import { searchFaqsTool } from "./agent/tools/search-faqs.js";
-import { lookupCustomerTool } from "./agent/tools/lookup-customer.js";
+import { getAllCustomers } from "./knowledge-base/index.js";
 import { createSupportTicket, URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "./integrations/monday/create-ticket.js";
 import { notifyEscalation } from "./integrations/slack/notify-escalation.js";
 import { mondayRequest } from "./integrations/monday/client.js";
@@ -97,6 +97,23 @@ function buildKnownDataNote(draft: TicketDraftFields): string {
     : "Ya están todos los datos requeridos para un ticket — si corresponde escalar, llamá a escalar_a_monday ahora mismo (podés llamarla sin argumentos, ya los tiene guardados), no vuelvas a listarlos ni a pedir confirmación.";
   return `\n\nDatos ya conocidos de este cliente para un eventual ticket de soporte — NO se los vuelvas a pedir: ${known.map(([k, v]) => `${k}="${v}"`).join(", ")}. ${status}`;
 }
+
+// ─── Tool buscar_cliente sobre customers.json (en vez de la colección Mongo real que usa
+// lookup-customer.ts en producción) — mismo motivo que el resto de los stores de este archivo:
+// este test no requiere MONGODB_URI de producción (ver docstring del archivo).
+const localLookupCustomerTool = tool(
+  async ({ email }) => {
+    const e = email.toLowerCase();
+    const customer = getAllCustomers().find((c) => c.email.toLowerCase() === e);
+    if (!customer) return "No se encontró ningún cliente con ese email.";
+    return JSON.stringify(customer, null, 2);
+  },
+  {
+    name: "buscar_cliente",
+    description: "Busca el estado de una cuenta de cliente por su email.",
+    schema: z.object({ email: z.string().describe("Email del cliente") }),
+  },
+);
 
 // ─── Tool escalar_a_monday con in-memory store ────────────────────────────────
 let lastCreatedTicketId: string | undefined;
@@ -178,7 +195,7 @@ async function askDanielE2E(userMessage: string, uid: string): Promise<string> {
   let ticketCreated = false;
   const toolsByName: Record<string, any> = {
     buscar_faqs: searchFaqsTool,
-    buscar_cliente: lookupCustomerTool,
+    buscar_cliente: localLookupCustomerTool,
     escalar_a_monday: buildEscalarTool(uid, effectiveDraft, () => {
       ticketCreated = true;
     }),

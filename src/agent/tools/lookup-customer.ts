@@ -1,10 +1,10 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { getCustomerByEmail } from "../../knowledge-base/index.js";
+import { getCustomerByEmail } from "../../integrations/mongo/customer-profile.js";
 
 export const lookupCustomerTool = tool(
   async ({ email }) => {
-    const customer = getCustomerByEmail(email);
+    const customer = await getCustomerByEmail(email);
     if (!customer) return "No se encontró ningún cliente con ese email.";
     return JSON.stringify(customer, null, 2);
   },

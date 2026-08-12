@@ -85,7 +85,7 @@ src/
     mongo/
       client.ts               # conexión lazy a MongoDB Atlas
       conversation-memory.ts    # chat_histories: historial por usuario de Slack
-      customer-profile.ts        # users: nombre/email persistente por usuario
+      customer-profile.ts        # customers (antes "users"): perfil + cuenta real, clave email
       ticket-draft.ts              # ticket_drafts: borrador de ticket en construcción
       webhook-events.ts             # webhook_raw_events: payloads crudos del webhook, ver abajo
     slack/
@@ -335,7 +335,11 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 
 1. **La integración realtime (ver "Estado actual" arriba) ya está mergeada a `main` (2026-08-12)** — antes vivía en la rama `feat/redtec-realtime-websocket` y había que traerla explícitamente (`git fetch` + `git checkout feat/redtec-realtime-websocket`); ahora ya no. Sigue **sin deployar/probar en vivo**: falta que RedTec confirme los datos del punto 7. El código es seguro en producción sin esas credenciales (no rompe nada si no están configuradas).
 
-2. **Migrar `customers.json` a Mongo — diseño ya decidido (2026-08-12), falta implementar.** Ya no es solo "colección plana": se decidió fusionar `customers.json` + la colección `users` existente en una sola colección `customers`, clave `email`, para resolver de una vez la falta de un campo `empresa` accesible por `slackUserId` (bloqueaba el gating del Agente Técnico y el futuro mapeo de `tenantId` de RedTec). Diseño completo, schema del documento, plan de migración y qué código cambia en `plans/2026-08-12-estructura-datos-clientes-e-ingesta-externa.md`. Nota del roadmap (punto 1 de `plans/2026-08-12-roadmap-premium-profesional.md`) sigue vigente: esta migración es solo la parte estructural — falta aparte reemplazar el *contenido* (las 16 FAQs y los 7 clientes son de ejemplo) antes de exponer Daniel a clientes externos reales.
+2. **Migrar `customers.json` a Mongo — código HECHO (2026-08-12), falta correr la migración contra producción.** `customer-profile.ts` ahora lee/escribe la colección `customers` (antes `users`), unificando el perfil de Slack (nombreCliente/email) con la cuenta real (empresa/producto/plan/etc., antes solo en `customers.json`), clave `email` — resuelve la falta de un campo `empresa` accesible por `slackUserId` que bloqueaba el gating del Agente Técnico y el futuro mapeo de `tenantId` de RedTec. `buscar_cliente` (`lookup-customer.ts`) ya consulta Mongo, no el JSON estático. Diseño completo en `plans/2026-08-12-estructura-datos-clientes-e-ingesta-externa.md`. Type-check limpio, 49/49 tests verdes (se sacaron 3 tests de `getCustomerByEmail` sobre el JSON, ya no existe esa función ahí).
+
+   **Falta el paso manual, no bloqueante para seguir developing pero bloqueante para producción**: correr `npm run migrate:customers` contra la `DanielSoporte` real — el script (`src/migrate-customers.ts`, idempotente) siembra `customers.json` en la colección `customers` y migra los documentos existentes de `users` (sin borrar `users`, queda de respaldo). Hasta que esto corra en producción, el código ya deployado leería una colección `customers` vacía — el perfil de un cliente que ya había hablado antes con Daniel quedaría "amnésico" una vez. Correrlo antes o justo al deployar este cambio.
+
+   Nota del roadmap (punto 1 de `plans/2026-08-12-roadmap-premium-profesional.md`) sigue vigente: esto es solo la parte estructural — falta aparte reemplazar el *contenido* (las 16 FAQs y los 7 clientes son de ejemplo) antes de exponer Daniel a clientes externos reales.
 
 También decidido el mismo día: convención estándar para datos que llegan de sistemas externos (webhook genérico, RedTec realtime, futuros) — colección `<fuente>_raw` con TTL default de 30 días + colección tipada derivada recién cuando el schema se conoce, ver el mismo plan. **Aplicado (2026-08-12)**: `webhook_raw_events` ya tiene el índice TTL de 30 días (`ensureRetentionIndex()`, mismo patrón lazy que `platform-metrics.ts`) — antes crecía sin límite desde 2026-08-11. Type-check limpio, 52/52 tests verdes.
 

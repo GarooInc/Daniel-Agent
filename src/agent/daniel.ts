@@ -90,7 +90,11 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
     extractTicketFields(history, userMessage),
   ]);
 
-  const effectiveDraft = mergeTicketFields(extracted, ticketDraft, profile ?? {});
+  // Solo nombreCliente/email del perfil son campos de ticket — el resto (empresa, producto de
+  // la cuenta contratada, plan, etc.) no lo son y "producto" en particular choca de tipo con
+  // ProductoTicket si se pasara el perfil entero acá (son dos cosas distintas: qué producto de
+  // RedTec tiene contratado el cliente vs. sobre cuál producto trata este ticket puntual).
+  const effectiveDraft = mergeTicketFields(extracted, ticketDraft, { nombreCliente: profile?.nombreCliente, email: profile?.email });
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
   let ticketCreated = false;

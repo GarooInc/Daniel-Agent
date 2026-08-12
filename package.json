@@ -12,7 +12,8 @@
     "start": "node dist/slack.js",
     "test": "vitest run",
     "test:e2e": "tsx src/test-e2e.ts",
-    "migrate:faqs": "tsx src/migrate-faqs.ts"
+    "migrate:faqs": "tsx src/migrate-faqs.ts",
+    "migrate:customers": "tsx src/migrate-customers.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
