@@ -98,6 +98,7 @@ src/
 plans/                    # planes de features grandes (Markdown), commiteados al repo
   2026-08-06-redtec-realtime-websocket.md
   2026-08-12-roadmap-premium-profesional.md   # evaluación estratégica: qué falta para pasar de v1 a producto premium/profesional
+  2026-08-12-agente-tecnico-n8n-spectrum.md   # diseño (sin código todavía) de un segundo agente IA que audita n8n vía MCP y se comunica con Daniel por un canal de Slack compartido
 ```
 
 Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo canal (web widget, WhatsApp) → una carpeta nueva en `channels/`; nueva integración externa (CRM, etc.) → una carpeta nueva en `integrations/`; nueva fuente de datos real → reemplazar la implementación en `knowledge-base/` sin tocar el resto.
@@ -342,6 +343,8 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
 10. **Seguridad, cabo suelto sin cerrar (nuevo, del roadmap): rotación del Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba)** — el App Token (Socket Mode) sí se roto y cortó al fantasma, pero "Reinstall to Workspace" no generó un Bot Token nuevo. Falta desinstalar la app del todo y reinstalar de cero para forzar un valor nuevo, o confirmar explícitamente que no hace falta.
 
 11. **Madurez operativa faltante (nuevo, del roadmap, no bloqueante para seguir usando Daniel hoy pero sí para escalarlo con confianza)**: cero observabilidad de negocio (no hay forma de ver volumen de tickets/tasa de escalación/tiempo de respuesta sin queries manuales a Mongo) y no existe un ambiente de staging separado de producción — varios bugs serios de este documento (tickets duplicados, el fantasma, datos mezclados entre sesiones) se depuraron en vivo contra Slack/Monday reales. Detalle y opciones de esfuerzo en `plans/2026-08-12-roadmap-premium-profesional.md`, prioridad 1.
+
+12. **Nueva iniciativa diseñada, sin código todavía: "Agente Técnico" para diagnosticar problemas de sistemas n8n de clientes (caso guía: Spectrum).** Idea de Jorge (2026-08-12): un segundo agente de IA, en un repo nuevo y separado (`Agente-Tecnico`), con acceso de solo lectura vía MCP (`n8n-mcp` + `@langchain/mcp-adapters`) a la instancia de n8n de un cliente, que vive en Slack junto a Daniel en un **canal compartido** visible para humanos. Flujo: Daniel menciona al agente técnico en ese canal describiendo el problema reportado por el cliente → el agente técnico audita n8n (workflows/ejecuciones/errores) y responde en el hilo → Daniel extrae el diagnóstico de forma estructurada y le contesta al cliente en la conversación original. Diseño completo (tools nuevas, esquema de Mongo para correlacionar la respuesta por `thread_ts`, estructura del repo nuevo, fases, estimación ~9-12 días) en `plans/2026-08-12-agente-tecnico-n8n-spectrum.md`. **Nada de esto está construido** — el próximo paso al retomar es empezar por el lado Daniel (tool `consultar_agente_tecnico` + persistencia del handoff), que no depende de que el repo del agente técnico exista todavía.
 
 ## Referencia rápida del stack
 
