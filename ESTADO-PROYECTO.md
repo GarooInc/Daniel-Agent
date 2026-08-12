@@ -239,7 +239,7 @@ Implementado channel-agnostic, para que Slack y WhatsApp compartan la misma lóg
 - `src/channels/slack/message-handler.ts`: log del evento crudo de Slack antes de cualquier filtro, y log antes/después/catch de `bufferMessage` con timeout de 8s.
 - `src/messaging/debounce-queue.ts`: logs `DEBUG bufferMessage`, `DEBUG job agendado`, `DEBUG flush de debounce` (este último loguea el array completo de mensajes, útil para diagnosticar pero verboso para dejar en producción).
 
-**Nota de seguridad encontrada de paso (no bloqueante)**: Coolify hornea todos los secrets de la app (`REDIS_URL` incluido) como `ARG` de Docker durante el build — quedan visibles en el historial de capas de la imagen. Hay un checkbox "Use Docker Build Secrets" sin tildar en la pantalla de Environment Variables que probablemente evite esto — pendiente de revisar, no bloquea el trabajo actual.
+**Nota de seguridad — RESUELTA (2026-08-12)**: Coolify horneaba todos los secrets de la app (`REDIS_URL` incluido) como `ARG` de Docker durante el build — quedaban visibles en el historial de capas de la imagen. El control real (esta versión de Coolify no tiene un checkbox "Use Docker Build Secrets" — está en Configuration → Advanced → Build, se llama **"Inject Build Args to Dockerfile"**) estaba tildado. El `Dockerfile` del repo no declara ningún `ARG`, así que no lo necesitaba para nada — se destildó y se hizo Redeploy sin romper el build.
 
 **Cuando se retome**: pedir el log fresco (F5) de la prueba de "mensaje uno/dos/tres" para ver cuántos `DEBUG evento de mensaje crudo recibido` / `DEBUG job agendado` / `DEBUG flush de debounce` aparecieron — eso va a decir si el problema es que cada mensaje sigue generando su propio job (algo en la lógica de "buscar y remover el job delayed existente" no está encontrando el job anterior) o algo distinto.
 
@@ -345,7 +345,7 @@ También decidido el mismo día: convención estándar para datos que llegan de 
 
 3. **Seguridad — decisión tomada (2026-08-12): dejar la regla SSH (puerto 22) abierta a cualquier IP, a propósito.** Jorge se conecta vía VPN, así que su IP de origen varía — restringir a una IP fija lo dejaría afuera del VPS. No es un pendiente, es una decisión consciente dado ese constraint. Si en el futuro se usa una VPN con IP de salida fija, reconsiderar.
 
-4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba). Ver también punto 3 del roadmap (`plans/2026-08-12-roadmap-premium-profesional.md`).
+4. **Seguridad — HECHO (2026-08-12).** Se destildó "Inject Build Args to Dockerfile" en Coolify (Configuration → Advanced → Build) y se redeployó — ver detalle arriba. Cierra el punto 3 del roadmap (`plans/2026-08-12-roadmap-premium-profesional.md`).
 
 5. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
 
