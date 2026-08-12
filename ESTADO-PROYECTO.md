@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-06
+Última actualización: 2026-08-12
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -97,6 +97,7 @@ src/
 
 plans/                    # planes de features grandes (Markdown), commiteados al repo
   2026-08-06-redtec-realtime-websocket.md
+  2026-08-12-roadmap-premium-profesional.md   # evaluación estratégica: qué falta para pasar de v1 a producto premium/profesional
 ```
 
 Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo canal (web widget, WhatsApp) → una carpeta nueva en `channels/`; nueva integración externa (CRM, etc.) → una carpeta nueva en `integrations/`; nueva fuente de datos real → reemplazar la implementación en `knowledge-base/` sin tocar el resto.
@@ -315,17 +316,19 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
 
 Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo"). Lo que queda realmente abierto hoy:
 
+**Evaluación estratégica (2026-08-12)**: `plans/2026-08-12-roadmap-premium-profesional.md` tiene el diagnóstico completo de qué falta para pasar de "v1 que funciona en dogfooding interno" a "producto premium confiable con clientes externos reales" (datos reales de KB/clientes, CI, observabilidad de negocio, staging, segundo canal, etc.), con prioridades y esfuerzo estimado. Los ítems de esa evaluación que ya estaban en esta lista se marcan abajo con referencia cruzada; los que son nuevos se agregaron como puntos 9-11.
+
 1. **La integración realtime (ver "Estado actual" arriba) vive en la rama `feat/redtec-realtime-websocket`, con 2 commits, todavía NO pusheada a GitHub ni mergeada a `main`.** Si se retoma este trabajo desde otra máquina, hay que traer esta rama explícitamente (`git fetch` + `git checkout feat/redtec-realtime-websocket`) — un `git pull` en `main` no la va a traer. Falta decidir cuándo pushear/mergear (probablemente cuando RedTec confirme los datos del punto 7, aunque el código ya es seguro de mergear antes: no rompe nada si esas credenciales no están configuradas).
 
-2. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba.
+2. **Migrar `customers.json` a una colección Mongo plana (sin vectores)** — no bloqueante, sin apuro. Es un lookup exacto por email, no se beneficia de similarity search (a diferencia de las FAQs, ya migradas). Ver "Paso 5" arriba. Nota del roadmap (punto 1 de `plans/2026-08-12-roadmap-premium-profesional.md`): esta migración es solo la parte estructural — sigue pendiente, aparte, reemplazar el *contenido* (las 16 FAQs y los 7 clientes son todos de ejemplo, no datos reales de RedTec) antes de exponer Daniel a clientes externos reales.
 
 3. **Seguridad, no bloqueante: re-restringir la regla SSH (puerto 22) de la VPS a una IP específica** — quedó abierta a cualquier IP desde que se movió el bot al VPS (2026-07-29/30).
 
-4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba).
+4. **Seguridad, no bloqueante: revisar el checkbox "Use Docker Build Secrets" en Coolify** — sin esto, Coolify hornea todos los secrets de la app (incluido `REDIS_URL`) como `ARG` de Docker durante el build, visibles en el historial de capas de la imagen (ver "Paso 4" arriba). Ver también punto 3 del roadmap (`plans/2026-08-12-roadmap-premium-profesional.md`).
 
 5. **Sin confirmar del todo, baja prioridad: si el fantasma podría reaparecer.** Se rotaron los tokens y no volvió a responder en ningún retest posterior, pero la causa raíz exacta (qué proceso era) nunca se confirmó — solo se descartó indirectamente. Si vuelve a verse una respuesta duplicada o con amnesia total, revisar primero si hay una segunda app/Workflow Builder instalada en el admin de Slack (ver "Hallazgo mayor" arriba).
 
-6. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas.
+6. **Calibración del umbral de relevancia de `buscar_faqs` (`MIN_SCORE = 0.72`)** — confirmado con un puñado de pruebas manuales, no con volumen real de uso. Ajustar si en producción se ve que deja pasar FAQs que no aplican o descarta FAQs válidas. Depende de tener tráfico real primero (ver punto 1 del roadmap).
 
 7. **Bloqueante para activar el WebSocket de tiempo real de RedTec (ver "Estado actual" arriba, 2026-08-06): falta que RedTec confirme dos datos.**
    - La URL real del dominio de la plataforma (`REDTEC_PLATFORM_WS_URL` — la guía usa un placeholder).
@@ -333,6 +336,12 @@ Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memo
    - Una vez confirmados: cargar ambas en Coolify, redeploy, confirmar en logs "Realtime de RedTec conectado", confirmar por query directa a Mongo que `platform_metrics` recibe un doc nuevo cada ~30s, y probar en Slack "¿está funcionando el sistema?" / "¿cómo estuvo en la última hora?".
 
 8. **No bloqueante, para cuando haga falta**: construir el mapeo cliente-de-Slack → `tenantId` de RedTec Realstate y recién ahí exponer una tool de leads/citas sobre `platform_events` (que ya se está llenando desde el 2026-08-06, sin ningún consumidor todavía).
+
+9. **CI faltante (nuevo, del roadmap): no hay `.github/workflows/`.** `npx tsc --noEmit` y `npm test` (44 tests) solo corren si alguien se acuerda de correrlos a mano antes de pushear — no hay gate automático en push/PR. No requiere secrets de producción (los tests ya mockean Mongo/OpenRouter/Monday). Esfuerzo chico (~medio día), alto impacto dado el historial de bugs de este proyecto.
+
+10. **Seguridad, cabo suelto sin cerrar (nuevo, del roadmap): rotación del Bot Token de Slack (`xoxb-...`) quedó a medias durante la investigación del "fantasma" (ver "Hallazgo mayor" arriba)** — el App Token (Socket Mode) sí se roto y cortó al fantasma, pero "Reinstall to Workspace" no generó un Bot Token nuevo. Falta desinstalar la app del todo y reinstalar de cero para forzar un valor nuevo, o confirmar explícitamente que no hace falta.
+
+11. **Madurez operativa faltante (nuevo, del roadmap, no bloqueante para seguir usando Daniel hoy pero sí para escalarlo con confianza)**: cero observabilidad de negocio (no hay forma de ver volumen de tickets/tasa de escalación/tiempo de respuesta sin queries manuales a Mongo) y no existe un ambiente de staging separado de producción — varios bugs serios de este documento (tickets duplicados, el fantasma, datos mezclados entre sesiones) se depuraron en vivo contra Slack/Monday reales. Detalle y opciones de esfuerzo en `plans/2026-08-12-roadmap-premium-profesional.md`, prioridad 1.
 
 ## Referencia rápida del stack
 
