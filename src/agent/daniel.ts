@@ -47,7 +47,7 @@ function buildKnownDataNote(effectiveDraft: TicketDraftFields): string {
     .join(", ")}. ${status}`;
 }
 
-export async function askDaniel(userMessage: string, slackUserId: string): Promise<string> {
+export async function askDaniel(userMessage: string, slackUserId: string, channelId: string): Promise<string> {
   const model = buildModel();
   const [lastMessageAt, historyRaw, profile, ticketDraftRaw] = await Promise.all([
     getLastMessageAt(slackUserId),
@@ -98,7 +98,7 @@ export async function askDaniel(userMessage: string, slackUserId: string): Promi
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
   let ticketCreated = false;
-  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, () => {
+  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, () => {
     ticketCreated = true;
   });
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [

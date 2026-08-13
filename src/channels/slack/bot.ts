@@ -22,7 +22,7 @@ export async function startSlackBot(): Promise<void> {
   registerMessageHandler(app, auth.user_id as string);
 
   const worker = startDebounceWorker(async (_source, slackUserId, channelId, texto) => {
-    await handleResolvedMessage(app.client, slackUserId, texto, (text) =>
+    await handleResolvedMessage(app.client, slackUserId, channelId, texto, (text) =>
       app.client.chat.postMessage({ channel: channelId, text }),
     );
   });

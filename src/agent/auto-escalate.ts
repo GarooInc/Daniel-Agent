@@ -3,11 +3,13 @@ import { notifyEscalation } from "../integrations/slack/notify-escalation.js";
 import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
 import { clearHistory } from "../integrations/mongo/conversation-memory.js";
 import { clearTicketDraft, getTicketDraft } from "../integrations/mongo/ticket-draft.js";
+import { saveTicketConversation } from "../integrations/mongo/ticket-conversations.js";
 import { mergeTicketFields } from "./tools/ticket-fields.js";
 import { logger } from "../config/logger.js";
 
 export type FailedConversation = {
   slackUserId: string;
+  channelId: string;
   nombreClienteFallback: string;
   textoOriginal: string;
   motivo: string;
@@ -60,6 +62,9 @@ export async function escalateUnresolvedConversation(input: FailedConversation):
 
     notifyEscalation({ ticketId, ...ticket }).catch((error) => {
       logger.warn({ err: error }, "No se pudo notificar el canal de escalación en Slack");
+    });
+    saveTicketConversation(ticketId, input.slackUserId, input.channelId).catch((error) => {
+      logger.warn({ err: error, ticketId, slackUserId: input.slackUserId }, "No se pudo guardar la correlación ticket↔conversación");
     });
     clearTicketDraft(input.slackUserId).catch((error) => {
       logger.warn({ err: error, slackUserId: input.slackUserId }, "No se pudo limpiar el borrador del ticket tras la auto-escalación");

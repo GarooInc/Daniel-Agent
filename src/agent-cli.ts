@@ -5,7 +5,7 @@ const pregunta = process.argv.slice(2).join(" ") || "¿Cómo conecto Isabella co
 
 console.log("RedTec Portal - Daniel - AGENTE DE SOPORTE");
 console.log(`Pregunta: ${pregunta}\n`);
-const respuesta = await askDaniel(pregunta, "cli-local-test");
+const respuesta = await askDaniel(pregunta, "cli-local-test", "cli-local-test");
 
 
 console.log(`Daniel: ${respuesta}`);

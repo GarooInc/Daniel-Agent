@@ -6,17 +6,20 @@ const clearTicketDraft = vi.fn().mockResolvedValue(undefined);
 const clearHistory = vi.fn().mockResolvedValue(undefined);
 const getCustomerProfile = vi.fn();
 const getTicketDraft = vi.fn();
+const saveTicketConversation = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../integrations/monday/index.js", () => ({ createSupportTicket }));
 vi.mock("../integrations/slack/notify-escalation.js", () => ({ notifyEscalation }));
 vi.mock("../integrations/mongo/customer-profile.js", () => ({ getCustomerProfile }));
 vi.mock("../integrations/mongo/conversation-memory.js", () => ({ clearHistory }));
 vi.mock("../integrations/mongo/ticket-draft.js", () => ({ clearTicketDraft, getTicketDraft }));
+vi.mock("../integrations/mongo/ticket-conversations.js", () => ({ saveTicketConversation }));
 
 const { escalateUnresolvedConversation } = await import("./auto-escalate.js");
 
 const BASE_INPUT = {
   slackUserId: "U123",
+  channelId: "C123",
   nombreClienteFallback: "Usuario de Slack U123",
   textoOriginal: "mi correo es jorge@redtec.ai",
   motivo: "agotó los pasos permitidos",
@@ -84,11 +87,12 @@ describe("escalateUnresolvedConversation", () => {
     );
   });
 
-  it("limpia el draft y el historial tras crear el ticket", async () => {
+  it("limpia el draft y el historial tras crear el ticket, y guarda la correlación ticket↔conversación", async () => {
     await escalateUnresolvedConversation(BASE_INPUT);
 
     expect(clearTicketDraft).toHaveBeenCalledWith("U123");
     expect(clearHistory).toHaveBeenCalledWith("U123");
+    expect(saveTicketConversation).toHaveBeenCalledWith("3200000099", "U123", "C123");
   });
 
   it("devuelve undefined si Monday falla", async () => {
@@ -97,6 +101,7 @@ describe("escalateUnresolvedConversation", () => {
     const result = await escalateUnresolvedConversation(BASE_INPUT);
 
     expect(result).toBeUndefined();
+    expect(saveTicketConversation).not.toHaveBeenCalled();
   });
 
   it("igual escala aunque falle el lookup del draft en Mongo", async () => {

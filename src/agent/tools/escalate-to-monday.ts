@@ -6,6 +6,7 @@ import { notifyEscalation } from "../../integrations/slack/notify-escalation.js"
 import { saveCustomerProfile } from "../../integrations/mongo/customer-profile.js";
 import { clearHistory } from "../../integrations/mongo/conversation-memory.js";
 import { clearTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
+import { saveTicketConversation } from "../../integrations/mongo/ticket-conversations.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./ticket-fields.js";
 import { logger } from "../../config/logger.js";
 
@@ -13,9 +14,12 @@ import { logger } from "../../config/logger.js";
 // y el borrador ya calculado por daniel.ts para esta conversación (evita repetir el mismo
 // fetch+merge de Mongo que daniel.ts ya hizo momentos antes). Se puede llamar con datos
 // parciales o sin argumentos en cualquier momento — si algo falta, lo dice y lo recuerda.
+// channelId es para poder avisarle después al cliente si algo externo notifica un cambio de
+// estado del ticket (ver ticket-conversations.ts) — no se usa para nada más acá.
 export function createEscalateToMondayTool(
   slackUserId: string,
   effectiveDraft: TicketDraftFields,
+  channelId: string,
   onTicketCreated?: () => void,
 ) {
   return tool(
@@ -49,6 +53,9 @@ export function createEscalateToMondayTool(
         });
         clearTicketDraft(slackUserId).catch((error) => {
           logger.warn({ err: error, slackUserId }, "No se pudo limpiar el borrador del ticket");
+        });
+        saveTicketConversation(ticketId, slackUserId, channelId).catch((error) => {
+          logger.warn({ err: error, ticketId, slackUserId }, "No se pudo guardar la correlación ticket↔conversación");
         });
         if (onTicketCreated) {
           onTicketCreated();

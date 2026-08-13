@@ -26,11 +26,12 @@ function alreadyProcessed(eventId: string): boolean {
 export async function handleResolvedMessage(
   client: WebClient,
   slackUserId: string,
+  channelId: string,
   texto: string,
   respond: (text: string) => Promise<unknown>,
 ): Promise<void> {
   try {
-    const respuesta = await askDaniel(texto, slackUserId);
+    const respuesta = await askDaniel(texto, slackUserId, channelId);
     await respond(toSlackMrkdwn(respuesta));
   } catch (error) {
     logger.error({ err: error, slackUserId }, "Error al consultar a Daniel");
@@ -50,6 +51,7 @@ export async function handleResolvedMessage(
 
     const ticketId = await escalateUnresolvedConversation({
       slackUserId,
+      channelId,
       nombreClienteFallback: nombreCliente,
       textoOriginal: texto,
       motivo,
