@@ -151,40 +151,50 @@ export async function markHandoffAnswered(threadTs: string, respuestaCruda: stri
 export async function markHandoffTimeout(threadTs: string): Promise<void>;
 ```
 
-### A.3 — Detectar la respuesta del agente técnico (correlación por `thread_ts`)
+### A.3 — Detectar la respuesta del agente técnico (webhook, no Slack) — **IMPLEMENTADO 2026-08-13, rediseñado**
 
-Hoy `message-handler.ts` no usa `thread_ts` ni distingue `message.bot_id`. Se agrega un
-**handler nuevo y separado** (no se mezcla con `registerMessageHandler`, mismo principio de
-módulos de propósito único que ya siguen `notify-escalation.ts`/`create-ticket.ts`).
+**Cambio respecto a la versión original de este plan**: la sección "Discusión de diseño" más
+abajo identificaba que correlacionar por "cualquier mensaje de bot en el hilo de Slack" es
+frágil (toma el primer mensaje narrado como si fuera el diagnóstico final) y que el canal
+compartido, si es solo para que humanos *observen*, no necesita ser también el bus de
+correlación máquina-a-máquina. Jorge resolvió el punto abierto (2026-08-13): **el canal
+compartido es solo para narración visible a humanos, no para intervención en esta fase.** Se
+separan los dos roles:
 
-Archivo nuevo: `src/channels/slack/tech-agent-response-handler.ts`
+- **Slack (canal compartido)**: el Agente Técnico sigue posteando ahí su proceso/narración
+  (`<@bot_id> encontré esto...`) — visible para humanos de RedTec, sin ningún efecto funcional
+  en Daniel.
+- **HTTP (webhook ya existente `POST /webhook/internal`, `src/channels/webhook/server.ts`)**:
+  cuando el Agente Técnico termina, hace un POST ahí con la señal explícita e inequívoca de
+  "diagnóstico listo":
+  ```json
+  { "type": "tech_agent_diagnosis", "threadTs": "<el mismo ts que Daniel posteó al abrir el handoff>", "mensaje": "<texto del diagnóstico>" }
+  ```
+  Autenticado con el mismo `X-Webhook-Secret: <WEBHOOK_SECRET>` que ya exige la ruta — no hace
+  falta un secreto nuevo. `threadTs` es la misma clave de correlación de A.2 (`tech_agent_handoffs.threadTs`).
 
-```ts
-export function registerTechAgentResponseHandler(app: App, sharedChannelId: string, ownBotId: string): void {
-  app.message(async ({ message, client }) => {
-    if (!("channel" in message) || message.channel !== sharedChannelId) return;
-    if (!("bot_id" in message) || !message.bot_id) return;       // solo respuestas de bots
-    if (message.bot_id === ownBotId) return;                     // ignorar los propios posts de Daniel
-    if (!("thread_ts" in message) || !message.thread_ts) return; // solo respuestas en hilo
+Implementado:
+- `src/channels/webhook/handle-tech-agent-diagnosis.ts`: `isTechAgentDiagnosisPayload(body)`
+  (type guard) + `handleTechAgentDiagnosis(client, payload)` — busca el handoff pendiente por
+  `threadTs` (`findPendingHandoffByThreadTs`, ya existía de A.2) y si lo encuentra, delega en
+  A.4. Si no hay handoff (ya resuelto, expiró, o `threadTs` desconocido), solo loguea un warning
+  y no hace nada.
+- `src/channels/webhook/server.ts`: ahora recibe un `client: WebClient` por parámetro y
+  despacha por `body.type` — si es `"tech_agent_diagnosis"` llama al handler anterior de forma
+  **fire-and-forget** (`.catch()` con warning, mismo patrón que `saveWebhookEvent`); cualquier
+  otro payload sigue cayendo al log+guardado genérico de siempre, sin romper nada de lo
+  existente (incluido lo que use Pendiente #13 de `ESTADO-PROYECTO.md` en el futuro).
+- `src/channels/slack/bot.ts`: pasa `app.client` (el `WebClient` ya autenticado de Bolt) a
+  `startWebhookServer(app.client)` — no crea una instancia nueva, reusa la existente.
 
-    const handoff = await findPendingHandoffByThreadTs(message.thread_ts);
-    if (!handoff) return; // hilo no rastreado (charla suelta, u otro agente) — ignorar
+**No implementado, ya no aplica**: `tech-agent-response-handler.ts` (el listener de Slack de la
+versión original de esta sección) — descartado por el cambio de diseño arriba. El repo
+`Agente-Tecnico` (todavía no existe) deberá implementar el lado que llama a este webhook.
 
-    const texto = "text" in message ? message.text ?? "" : "";
-    await deliverTechAgentDiagnosis(client, handoff, texto);
-  });
-}
-```
+### A.4 — Extracción confiable + respuesta diferida al cliente — **IMPLEMENTADO 2026-08-13**
 
-`ownBotId` es el **`bot_id`** de Daniel (no el `user_id` que ya se usa hoy) — `auth.test()`
-también lo devuelve; hay que capturarlo en `bot.ts` junto al `user_id` existente y registrar
-este handler nuevo ahí mismo, con el canal compartido resuelto una vez al boot.
-
-### A.4 — Extracción confiable + respuesta diferida al cliente
-
-Archivo nuevo: `src/agent/extract-tech-diagnosis.ts`, mismo patrón `withStructuredOutput` que
-`extract-ticket-fields.ts` (modelo secundario, corre en paralelo, con validación
-determinística):
+`src/agent/extract-tech-diagnosis.ts`, mismo patrón `withStructuredOutput` que
+`extract-ticket-fields.ts` (modelo secundario, `MODEL` fijo de `agent/model.ts`):
 
 ```ts
 const DiagnosisSchema = z.object({
@@ -198,24 +208,25 @@ const DiagnosisSchema = z.object({
 export async function extractTechDiagnosis(mensajeAgenteTecnico: string): Promise<z.infer<typeof DiagnosisSchema>>;
 ```
 
-Separar `causaRaiz`/`componenteAfectado` (uso interno) de `resumenParaCliente` es deliberado:
-la jerga interna de n8n no debe llegarle a Spectrum.
+Separar `causaRaiz`/`componenteAfectado` (uso interno, se guardan en el handoff) de
+`resumenParaCliente` es deliberado: la jerga interna de n8n no debe llegarle a Spectrum.
 
-Archivo nuevo: `src/agent/tech-agent-handoff.ts` — entrega diferida, reusando el patrón de
-"postear fuera del ciclo del evento entrante" que ya usa `handleResolvedMessage`/
-`debounce-queue.ts`:
+`src/agent/deliver-tech-diagnosis.ts` (nombre final; la versión original de este plan lo llamaba
+`agent/tech-agent-handoff.ts`, renombrado para no chocar con `integrations/mongo/tech-agent-handoff.ts`)
+— entrega diferida, reusando el patrón de "postear fuera del ciclo del evento entrante" que ya
+usa `handleResolvedMessage`/`debounce-queue.ts`:
 
 ```ts
-export async function deliverTechAgentDiagnosis(client: WebClient, handoff: TechAgentHandoffDoc, textoAgenteTecnico: string): Promise<void> {
-  const diagnosis = await extractTechDiagnosis(textoAgenteTecnico);
-  await markHandoffAnswered(handoff.threadTs, textoAgenteTecnico, diagnosis.causaRaiz, diagnosis.componenteAfectado);
+export async function deliverTechDiagnosis(client: WebClient, handoff: TechAgentHandoffDoc, mensajeAgenteTecnico: string): Promise<void> {
+  const diagnosis = await extractTechDiagnosis(mensajeAgenteTecnico);
+  await markHandoffAnswered(handoff.threadTs, mensajeAgenteTecnico, diagnosis.causaRaiz, diagnosis.componenteAfectado);
 
   const mensajeFinal = diagnosis.resuelto
     ? `Nuestro equipo técnico revisó tu caso: ${diagnosis.resumenParaCliente}`
     : `Nuestro equipo técnico está investigando tu caso. Por ahora: ${diagnosis.resumenParaCliente}`;
 
   await client.chat.postMessage({ channel: handoff.originalChannelId, text: toSlackMrkdwn(mensajeFinal) });
-  await appendMessage(handoff.originalSlackUserId, "ai", mensajeFinal); // no perder continuidad en chat_histories
+  await appendMessage(handoff.originalSlackUserId, "ai", mensajeFinal).catch(...); // best-effort, no pierde la entrega si falla
 }
 ```
 
@@ -223,6 +234,11 @@ No se reinvoca `askDaniel()` completo — sería un tool-loop innecesario sobre 
 determinística, consistente con la filosofía del proyecto de preferir lo determinístico sobre
 confiar en que el LLM "decida bien" (ver comentarios de `daniel.ts` y `ticket-fields.ts` sobre
 bugs reales de eso).
+
+**Gap conocido, aceptado por ahora**: si `extractTechDiagnosis` falla (error de red/LLM), el
+handoff queda `"pending"` para siempre y el cliente nunca recibe respuesta — no hay reintento.
+Mismo gap que ya existía sin timeout (A.5, todavía sin construir); no se resuelve acá a
+propósito, mismo criterio de alcance que el resto de A.1-A.4.
 
 ### A.5 — Timeout si el agente técnico no responde
 
@@ -362,7 +378,21 @@ antes de tener los reales.
    `appendMessage`, y el status pasó a `answered`. Valida la lógica de correlación sin Slack ni
    el agente técnico corriendo.
 
-## Discusión de diseño (2026-08-13): mecanismo de comunicación Daniel↔Agente Técnico, sin resolver
+## Discusión de diseño (2026-08-13): mecanismo de comunicación Daniel↔Agente Técnico — **RESUELTO**
+
+**Resolución de Jorge (2026-08-13, mismo día): el canal compartido es solo para observación
+humana en esta fase, no para intervención.** Implementado en A.3/A.4 arriba: Slack queda como
+narración visible, el webhook `POST /webhook/internal` (ya existente) es la señal real de
+correlación con `{"type": "tech_agent_diagnosis", "threadTs", "mensaje"}`. Esto resuelve los
+puntos 1 y 2 de la discusión original (ya no hay ambigüedad de "qué mensaje de bot es el
+definitivo", y ya no hace falta decidir qué hacer si un humano responde en el hilo — un humano
+respondiendo ahí simplemente no dispara nada, es solo charla visible). El punto 3 (reusar el
+webhook existente) es exactamente lo que se hizo. Queda el detalle de la sección "Supuestos a
+confirmar" de que un humano podría mencionar a `@Daniel` por curiosidad en ese canal — sigue sin
+resolver, no bloquea nada.
+
+<details>
+<summary>Discusión original (previa a la resolución, se conserva como contexto)</summary>
 
 Antes de tocar código se discutió el mecanismo de correlación de A.3/A.4 (Slack-canal-compartido
 como bus, correlación por `thread_ts`, cualquier mensaje de bot en el hilo = respuesta final) y
@@ -387,11 +417,10 @@ tomadas de la sección "Decisiones ya tomadas"**:
    explícita e inequívoca, con `threadTs`/`handoffId`), dejando el canal de Slack como pura
    narración visible para humanos — no como el mecanismo de correlación máquina-a-máquina.
 
-**Pregunta abierta para Jorge, bloqueante para cerrar A.3/A.4 (no bloquea A.1/A.2)**: ¿el canal
-compartido es principalmente para que humanos *observen* (auditoría/confianza) o para que puedan
-*intervenir* activamente ya en esta fase? Si es lo primero, la propuesta es separar los dos
-canales: Slack para narración humana-visible, HTTP (reusando el webhook existente) para la señal
-real de "diagnóstico listo". Si es lo segundo, el punto 2 hay que resolverlo ahora, no en Fase 2.
+**Pregunta que estaba abierta acá: ya resuelta arriba (2026-08-13)** — canal solo observación,
+webhook como señal real. Ver A.3/A.4 para la implementación.
+
+</details>
 
 ## Supuestos a confirmar con Jorge antes de construir (quedan documentados, no bloquean el plan)
 

@@ -27,7 +27,7 @@ export async function startSlackBot(): Promise<void> {
     );
   });
 
-  const webhookServer = startWebhookServer();
+  const webhookServer = startWebhookServer(app.client);
 
   const shutdown = async (signal: NodeJS.Signals) => {
     logger.info({ signal }, "Cerrando Daniel...");

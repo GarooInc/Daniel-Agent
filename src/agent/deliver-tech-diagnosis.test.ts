@@ -1,0 +1,79 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const extractTechDiagnosis = vi.fn();
+const markHandoffAnswered = vi.fn().mockResolvedValue(undefined);
+const appendMessage = vi.fn().mockResolvedValue(undefined);
+
+vi.mock("./extract-tech-diagnosis.js", () => ({ extractTechDiagnosis }));
+vi.mock("../integrations/mongo/tech-agent-handoff.js", () => ({ markHandoffAnswered }));
+vi.mock("../integrations/mongo/conversation-memory.js", () => ({ appendMessage }));
+
+const { deliverTechDiagnosis } = await import("./deliver-tech-diagnosis.js");
+
+const HANDOFF = {
+  threadTs: "1699999999.000100",
+  sharedChannelId: "C_AGENTES",
+  originalSlackUserId: "U_CLIENTE",
+  originalChannelId: "C_CLIENTE_DM",
+  resumenProblema: "El flujo de n8n falla al recibir un lead",
+  status: "pending" as const,
+  createdAt: new Date(),
+};
+
+function fakeClient() {
+  return { chat: { postMessage: vi.fn().mockResolvedValue({ ts: "1700000000.000200" }) } } as any;
+}
+
+describe("deliverTechDiagnosis", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("le manda al cliente el resumen sin jerga y marca el handoff como respondido cuando hay diagnóstico concreto", async () => {
+    extractTechDiagnosis.mockResolvedValue({
+      causaRaiz: "El nodo Webhook no valida el JSON entrante",
+      componenteAfectado: "Nodo Webhook",
+      resuelto: true,
+      resumenParaCliente: "encontramos un error en la validación de datos y ya lo corregimos",
+    });
+    const client = fakeClient();
+
+    await deliverTechDiagnosis(client, HANDOFF, "el nodo Webhook explota con JSON inválido, ya lo arreglé");
+
+    expect(markHandoffAnswered).toHaveBeenCalledWith(
+      "1699999999.000100",
+      "el nodo Webhook explota con JSON inválido, ya lo arreglé",
+      "El nodo Webhook no valida el JSON entrante",
+      "Nodo Webhook",
+    );
+    expect(client.chat.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C_CLIENTE_DM",
+        text: expect.stringContaining("encontramos un error en la validación de datos"),
+      }),
+    );
+    expect(appendMessage).toHaveBeenCalledWith("U_CLIENTE", "ai", expect.stringContaining("revisó tu caso"));
+  });
+
+  it("avisa que sigue investigando cuando el diagnóstico todavía no es concreto", async () => {
+    extractTechDiagnosis.mockResolvedValue({
+      resuelto: false,
+      resumenParaCliente: "seguimos revisando el flujo, todavía no encontramos la causa exacta",
+    });
+    const client = fakeClient();
+
+    await deliverTechDiagnosis(client, HANDOFF, "todavía estoy revisando, no encuentro nada raro aún");
+
+    expect(client.chat.postMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("está investigando tu caso") }));
+    expect(appendMessage).toHaveBeenCalledWith("U_CLIENTE", "ai", expect.stringContaining("investigando"));
+  });
+
+  it("no pierde la entrega al cliente si falla el guardado en el historial", async () => {
+    extractTechDiagnosis.mockResolvedValue({ resuelto: true, resumenParaCliente: "listo" });
+    appendMessage.mockRejectedValue(new Error("Mongo timeout"));
+    const client = fakeClient();
+
+    await expect(deliverTechDiagnosis(client, HANDOFF, "listo")).resolves.toBeUndefined();
+    expect(client.chat.postMessage).toHaveBeenCalled();
+  });
+});
