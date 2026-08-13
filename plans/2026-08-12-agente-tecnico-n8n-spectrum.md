@@ -362,6 +362,37 @@ antes de tener los reales.
    `appendMessage`, y el status pasó a `answered`. Valida la lógica de correlación sin Slack ni
    el agente técnico corriendo.
 
+## Discusión de diseño (2026-08-13): mecanismo de comunicación Daniel↔Agente Técnico, sin resolver
+
+Antes de tocar código se discutió el mecanismo de correlación de A.3/A.4 (Slack-canal-compartido
+como bus, correlación por `thread_ts`, cualquier mensaje de bot en el hilo = respuesta final) y
+aparecieron tres puntos débiles concretos, **todavía sin resolver, no reabren las decisiones ya
+tomadas de la sección "Decisiones ya tomadas"**:
+
+1. **"Cualquier mensaje de bot en el hilo = diagnóstico final" es frágil.** Si el agente técnico
+   narra su proceso ("dejame revisar...", después "encontré esto...") — comportamiento esperado
+   si se quiere transparencia en el canal — el handler de Daniel tomaría el primer mensaje como
+   definitivo. Falta una señal explícita de "esto es el diagnóstico final" (formato/campo
+   distinguible), no "el primer mensaje que aparece".
+2. **El filtro `bot_id` en A.3 corta la razón por la que se eligió Slack como transporte.** El
+   plan justifica el canal compartido como semilla para humanos-en-el-loop a futuro, pero A.3
+   descarta cualquier mensaje sin `bot_id` — si un humano responde en el hilo hoy, Daniel lo
+   ignora y el cliente no recibe nada (sin disparar el timeout tampoco). Si el canal es solo para
+   que humanos *observen* (no intervengan) en esta fase, el beneficio real de Slack-como-bus vs.
+   HTTP es más chico de lo que suena.
+3. **Ya existe infraestructura que este plan no reutiliza**: el webhook genérico
+   (`POST /webhook/internal`, `src/channels/webhook/server.ts`) se construyó pensando en "otros
+   agentes de RedTec" (ver Pendiente #13 de `ESTADO-PROYECTO.md`). El Agente Técnico podría
+   llamar a un endpoint HTTP de Daniel cuando termina el diagnóstico (señal de "terminé"
+   explícita e inequívoca, con `threadTs`/`handoffId`), dejando el canal de Slack como pura
+   narración visible para humanos — no como el mecanismo de correlación máquina-a-máquina.
+
+**Pregunta abierta para Jorge, bloqueante para cerrar A.3/A.4 (no bloquea A.1/A.2)**: ¿el canal
+compartido es principalmente para que humanos *observen* (auditoría/confianza) o para que puedan
+*intervenir* activamente ya en esta fase? Si es lo primero, la propuesta es separar los dos
+canales: Slack para narración humana-visible, HTTP (reusando el webhook existente) para la señal
+real de "diagnóstico listo". Si es lo segundo, el punto 2 hay que resolverlo ahora, no en Fase 2.
+
 ## Supuestos a confirmar con Jorge antes de construir (quedan documentados, no bloquean el plan)
 
 1. `SLACK_TECH_AGENT_USER_ID` se obtiene a mano una sola vez (crear la app de Slack del agente
