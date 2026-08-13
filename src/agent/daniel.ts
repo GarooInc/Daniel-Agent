@@ -1,3 +1,4 @@
+import type { WebClient } from "@slack/web-api";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { buildModel } from "./model.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
@@ -7,6 +8,7 @@ import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
 import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
+import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -47,8 +49,12 @@ function buildKnownDataNote(effectiveDraft: TicketDraftFields): string {
     .join(", ")}. ${status}`;
 }
 
-export async function askDaniel(userMessage: string, slackUserId: string, channelId: string): Promise<string> {
-  const model = buildModel();
+export async function askDaniel(
+  userMessage: string,
+  slackUserId: string,
+  channelId: string,
+  client?: WebClient,
+): Promise<string> {
   const [lastMessageAt, historyRaw, profile, ticketDraftRaw] = await Promise.all([
     getLastMessageAt(slackUserId),
     getRecentMessages(slackUserId),
@@ -97,10 +103,20 @@ export async function askDaniel(userMessage: string, slackUserId: string, channe
   const effectiveDraft = mergeTicketFields(extracted, ticketDraft, { nombreCliente: profile?.nombreCliente, email: profile?.email });
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
+  // Gating por cliente (decisión #3 de plans/2026-08-12-agente-tecnico-n8n-spectrum.md):
+  // consultar_agente_tecnico solo se ofrece si el cliente coincide con el que tiene soporte
+  // técnico configurado, o si todavía no se conoce su perfil (para no bloquear el primer
+  // contacto) — chequeo determinístico en código, no solo el criterio del modelo.
+  const techAgentEnabled = Boolean(
+    env.techAgentClienteSoportado &&
+      (!profile?.empresa || profile.empresa.toLowerCase() === env.techAgentClienteSoportado.toLowerCase()),
+  );
+
   let ticketCreated = false;
-  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, () => {
+  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, client, techAgentEnabled, () => {
     ticketCreated = true;
   });
+  const model = buildModel(Object.values(toolsByName));
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(SYSTEM_PROMPT + buildKnownDataNote(effectiveDraft)),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),

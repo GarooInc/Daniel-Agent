@@ -176,8 +176,6 @@ function buildEscalarTool(uid: string, effectiveDraft: TicketDraftFields, onTick
 const MAX_TOOL_ITERATIONS = 5;
 
 async function askDanielE2E(userMessage: string, uid: string): Promise<string> {
-  const model = buildModel();
-
   const lastAt = store.getLastMessageAt(uid);
   const isNewSession = !lastAt || Date.now() - lastAt.getTime() > SESSION_GAP_MS;
   const history   = isNewSession ? [] : store.getRecentMessages(uid);
@@ -200,6 +198,7 @@ async function askDanielE2E(userMessage: string, uid: string): Promise<string> {
       ticketCreated = true;
     }),
   };
+  const model = buildModel(Object.values(toolsByName));
 
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
     new SystemMessage(SYSTEM_PROMPT + buildKnownDataNote(effectiveDraft)),

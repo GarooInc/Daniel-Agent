@@ -31,7 +31,7 @@ export async function handleResolvedMessage(
   respond: (text: string) => Promise<unknown>,
 ): Promise<void> {
   try {
-    const respuesta = await askDaniel(texto, slackUserId, channelId);
+    const respuesta = await askDaniel(texto, slackUserId, channelId, client);
     await respond(toSlackMrkdwn(respuesta));
   } catch (error) {
     logger.error({ err: error, slackUserId }, "Error al consultar a Daniel");
