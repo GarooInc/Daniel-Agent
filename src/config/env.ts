@@ -27,10 +27,12 @@ export const env = {
   // arranque exploratorio mientras se descubre la estructura de los payloads que van a llegar.
   webhookSecret: process.env.WEBHOOK_SECRET,
   // Opcionales a propósito (no van en REQUIRED_ENV_VARS): el bot tiene que arrancar igual sin
-  // esto. RedTec todavía no confirmó la URL real de su plataforma, y su guía es inconsistente
-  // sobre el nombre del secreto (dice SUPPORT_AGENT_WEBHOOK_SECRET en el texto pero
-  // REDTEC_PLATFORM_WS_SECRET en el código de ejemplo) — confirmar antes de cargar un valor
-  // real. Ver integrations/redtec-realtime/client.ts.
+  // esto. RedTec todavía no confirmó la URL real de su plataforma — eso sigue bloqueando el
+  // primer deploy real. La ambigüedad del NOMBRE del secreto (la guía dice
+  // SUPPORT_AGENT_WEBHOOK_SECRET en el texto pero REDTEC_PLATFORM_WS_SECRET en el código de
+  // ejemplo) ya no bloquea nada: se acepta cualquiera de los dos nombres, así que cuando
+  // Coolify tenga cargada la variable que RedTec efectivamente use, esto conecta sin necesitar
+  // otro cambio de código/redeploy. Ver integrations/redtec-realtime/client.ts.
   redtecRealtimeUrl: process.env.REDTEC_PLATFORM_WS_URL,
-  redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET,
+  redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET || process.env.SUPPORT_AGENT_WEBHOOK_SECRET,
 };

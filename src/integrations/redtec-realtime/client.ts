@@ -25,7 +25,10 @@ export function connectRealtime(): void {
     auth: { secret: env.redtecRealtimeSecret },
   });
 
-  socket.on("connect", () => logger.info("Realtime de RedTec conectado"));
+  // La guía de RedTec es ambigua sobre el nombre de esta variable (ver config/env.ts) — se
+  // loguea cuál de las dos terminó resolviéndose para poder confirmar en Coolify sin adivinar.
+  const secretVarUsed = process.env.REDTEC_PLATFORM_WS_SECRET ? "REDTEC_PLATFORM_WS_SECRET" : "SUPPORT_AGENT_WEBHOOK_SECRET";
+  socket.on("connect", () => logger.info({ secretVarUsed }, "Realtime de RedTec conectado"));
   // La reconexión ante cortes de red la maneja socket.io solo (confirmado en la guía) — no
   // hace falta lógica propia de retry acá.
   socket.on("disconnect", (reason) => logger.warn({ reason }, "Realtime de RedTec desconectado (reintenta solo)"));
