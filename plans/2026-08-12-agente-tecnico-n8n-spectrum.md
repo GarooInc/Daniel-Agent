@@ -151,7 +151,16 @@ export async function markHandoffAnswered(threadTs: string, respuestaCruda: stri
 export async function markHandoffTimeout(threadTs: string): Promise<void>;
 ```
 
-### A.3 — Detectar la respuesta del agente técnico (webhook, no Slack) — **IMPLEMENTADO 2026-08-13, rediseñado**
+### A.3 — Detectar la respuesta del agente técnico (webhook, no Slack) — **IMPLEMENTADO 2026-08-13, SUPERSEDIDO el mismo día**
+
+> **SUPERSEDIDO (2026-08-13, más tarde el mismo día)**: esta sección describe lo que se
+> **implementó y se commiteó** (`70a8ee8`), pero horas después, al decidir que el Agente
+> Técnico va a ser una instancia de **Hermes Agent** (no un repo bespoke), se volvió sobre esta
+> decisión — ver **sección E** más abajo para el diseño vigente (Slack con mención explícita,
+> no webhook). El código de `handle-tech-agent-diagnosis.ts`/despacho en `server.ts` sigue en
+> el repo tal cual quedó, pero **queda pendiente de revertir/reemplazar** por un listener de
+> Slack — todavía no se tocó código, solo quedó documentado el cambio de rumbo (a propósito, así
+> lo pidió Jorge). No reabrir esta sección A.3 como si siguiera vigente sin leer la sección E.
 
 **Cambio respecto a la versión original de este plan**: la sección "Discusión de diseño" más
 abajo identificaba que correlacionar por "cualquier mensaje de bot en el hilo de Slack" es
@@ -266,7 +275,38 @@ duplicar la lógica de paginación+caché en la tool nueva.
 
 ---
 
-## B. Lado Agente Técnico (repo nuevo `Agente-Tecnico`)
+## B. Lado Agente Técnico (repo nuevo `Agente-Tecnico`) — **SUPERSEDIDO 2026-08-13, ver sección E**
+
+> **Esta sección B completa (repo nuevo `Agente-Tecnico` construido desde cero en Node/TS/LangChain.js,
+> con `@langchain/mcp-adapters` para n8n-mcp) queda SUPERSEDIDA.** Decisión (2026-08-13, mismo
+> día): el Agente Técnico va a ser una instancia configurada de **Hermes Agent**
+> (`github.com/NousResearch/hermes-agent`, MIT, de Nous Research) en vez de un repo propio
+> escrito a mano — "ya está creado, es solo configurarlo". Ver sección E para el diseño vigente.
+> Se conserva el contenido original de B como referencia (la lista de tools de solo lectura de
+> n8n-mcp sigue siendo válida conceptualmente, por ejemplo), pero **nada de esta sección se va a
+> construir tal cual está escrito**.
+
+### Decisiones de arranque (2026-08-13, sesión de "cómo construimos el lado B") — ver nota de arriba, contexto histórico
+
+- **Ya hay acceso real hoy al n8n de Spectrum (`N8N_API_URL`/`N8N_API_KEY`) y a su MongoDB** —
+  RedTec ya opera esa infraestructura. Esto descarta la necesidad de un n8n local descartable
+  (sección D.1) como paso previo: se construye y prueba B.2 directo contra lo real desde el
+  principio. La sección D.1 queda como alternativa solo si en algún momento se pierde el acceso
+  real temporalmente.
+- **Alcance nuevo, no estaba en la versión original de este plan**: además de n8n-mcp, el
+  Agente Técnico necesita **tools de solo lectura sobre la MongoDB de Spectrum** — conversaciones,
+  leads, appointments ("y otros más", sin terminar de enumerar) — para poder responder preguntas
+  de diagnóstico que n8n solo no contesta (ej. "¿se perdieron leads por este error?"). **Diseño
+  concreto (nombres de colección, forma de los documentos, qué tools exactas exponer) queda
+  pendiente** hasta tener el esquema real — decidido explícitamente NO resolverlo revisando
+  `Agent-Spectrum/` todavía ni pidiéndoselo a Jorge ahora, para no bloquear el resto. Cuando se
+  retome: mismo criterio de solo lectura que n8n-mcp (nada de escritura sobre datos de negocio
+  de Spectrum desde el MVP).
+- **Repo nuevo**: carpeta hermana local (`Garoo/Agente-Tecnico/`) + repo nuevo en GitHub, mismo
+  patrón que `Daniel-Agent` (para poder deployar en Coolify después).
+- **App de Slack propia del Agente Técnico**: todavía no existe. No bloquea el scaffold (B.1),
+  la conexión a n8n-mcp (B.2) ni el prompt (B.3) — hace falta crearla a mano (admin de Slack)
+  antes de poder probar B.4/B.5 (escuchar/responder) en vivo.
 
 ### B.1 — Estructura
 
@@ -421,6 +461,121 @@ tomadas de la sección "Decisiones ya tomadas"**:
 webhook como señal real. Ver A.3/A.4 para la implementación.
 
 </details>
+
+## E. Segundo rediseño (2026-08-13, misma sesión): tecnología Hermes Agent + comunicación 100% por Slack + un canal por cliente — **DISEÑO VIGENTE, sin implementar todavía**
+
+Sesión de "decidamos cómo construimos el Agente Técnico" — reemplaza la sección B y la parte de
+correlación de A.3/A.4 de arriba. **Nada de esto está implementado en código todavía** — a
+propósito, Jorge pidió dejarlo solo documentado en esta sesión.
+
+### E.1 — Tecnología: Hermes Agent, no un repo bespoke
+
+El Agente Técnico va a ser una instancia configurada de
+**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** (Nous Research, MIT license,
+open source, activo) en vez de escribir un repo Node/TS/LangChain.js desde cero (la sección B
+original). Investigación hecha sobre la doc oficial (`hermes-agent.nousresearch.com`, no
+confundir con sitios de contenido tipo `hermes-agent.ai`/`.org`/`hermes-ai.net` que aparecen en
+buscadores con el mismo nombre pero no son el proyecto real):
+
+- **Modelo/proveedor**: soporta OpenRouter (además de Nous Portal, OpenAI, o cualquier endpoint
+  compatible) — mismo proveedor que ya usa Daniel.
+- **MCP**: soporta conectarse a "cualquier servidor MCP" (`n8n-mcp` incluido) y permite
+  restringir exactamente qué tools de ese servidor se habilitan vía `tools: include: [...]` en
+  la config de cada servidor MCP — esto es lo que garantiza el requisito de **solo lectura**
+  sobre n8n (decisión ya tomada, no reabrir): se incluirían únicamente `search_nodes`, `get_node`,
+  `n8n_get_workflow`, `list_executions`, `get_execution`, `execution_explain` (la misma lista de
+  B.2 original), nunca las tools de escritura de n8n-mcp.
+- **Seguridad**: modelo de "defensa en profundidad" en 8 capas (aislamiento por contenedor
+  Docker/Singularity/Modal con `--cap-drop ALL`, filtrado de credenciales hacia subprocesos MCP,
+  aprobación humana para comandos peligrosos, sandbox de `execute_code` que bloquea env vars con
+  nombres tipo `KEY`/`TOKEN`/`SECRET`, escaneo de prompt injection en archivos de contexto,
+  aislamiento entre sesiones). Más robusto de lo esperado para un proyecto de este tipo.
+- **Gap encontrado, sin verificar todavía**: la documentación **no menciona restricción de
+  tools por canal de Slack** — la autorización es a nivel de usuario (allowlists), no de canal.
+  Como cada instancia va a vivir en un canal privado dedicado (ver E.3), esto probablemente no
+  importa en la práctica (nadie más tiene acceso al canal), pero **queda pendiente confirmarlo
+  en una prueba real**, no asumirlo de la doc.
+- **Despliegue**: VPS/Docker/SSH/Daytona/Singularity/Modal — se planea VPS, igual que Daniel.
+- **Webhook saliente**: Hermes tiene `hooks.outbound` (eventos de ciclo de vida firmados con
+  HMAC hacia una URL), pero el payload es fijo al esquema del evento, no permite campos propios
+  como nuestro `threadTs`. Además hay un
+  [issue abierto sin resolver](https://github.com/NousResearch/hermes-agent/issues/4386)
+  pidiendo exactamente "mandar la respuesta a un chatbot externo" — no está mergeado. **Por esto
+  se descarta el webhook como mecanismo de correlación** (ver E.2) y se vuelve a Slack, que es
+  la fortaleza nativa de Hermes.
+
+### E.2 — Comunicación Daniel↔Agente Técnico: 100% por Slack, simétrica, con mención explícita como señal de "final"
+
+Reabre y reemplaza la decisión de A.3/A.4 de usar el webhook `/webhook/internal` como señal de
+correlación (esa decisión había resuelto la fragilidad de "cualquier mensaje de bot en el hilo
+= final", pero forzar a Hermes a llamar un webhook con nuestro payload exacto hoy requiere una
+función que Hermes todavía no tiene lista, ver E.1). Nuevo mecanismo, que resuelve la misma
+fragilidad de otra forma:
+
+1. Daniel postea en el canal privado (ver E.3) mencionando `<@bot_id del Técnico>` con el
+   resumen del problema — esto ya está implementado (A.1, `consult-tech-agent.ts`), sin cambios.
+2. El Técnico puede narrar su proceso en el mismo hilo con varios mensajes (visible para
+   humanos que estén en el canal) — libre, sin restricción.
+3. **Señal de "esta es la respuesta final"**: el Técnico menciona explícitamente `<@bot_id de
+   Daniel>` en su mensaje final, en el mismo hilo. Un handler nuevo en Daniel (reemplaza el
+   `handle-tech-agent-diagnosis.ts` basado en webhook) escucha mensajes en el canal privado del
+   par cliente↔técnico, filtra por `thread_ts` (correlación con `tech_agent_handoffs`, igual que
+   antes) **y exige que el mensaje mencione el `bot_id` de Daniel** — así se ignoran los mensajes
+   de narración (no mencionan a Daniel) y solo se procesa el mensaje dirigido explícitamente a
+   él. Mismo principio simétrico que ya usa Daniel para saber cuándo responder en un canal
+   (requiere mención), aplicado en la dirección inversa.
+4. A partir de ahí, A.4 sigue igual conceptualmente (extracción con `extractTechDiagnosis`,
+   entrega con `deliverTechDiagnosis`) — solo cambia qué dispara la llamada (un mensaje de Slack
+   con mención, no un POST al webhook).
+
+**Pendiente de implementar** (no tocar código todavía, según lo pedido): reemplazar
+`src/channels/webhook/handle-tech-agent-diagnosis.ts` (y su despacho en `server.ts`) por un
+handler de tipo `app.message` en `src/channels/slack/`, similar al `tech-agent-response-handler.ts`
+de la versión *original* de A.3 (antes del primer rediseño), pero con el filtro de mención
+agregado. El webhook `/webhook/internal` queda sin uso para este propósito (sigue existiendo
+para lo demás, ver Pendiente #13 de `ESTADO-PROYECTO.md`).
+
+### E.3 — Un canal de Slack privado por cliente, no un canal único compartido
+
+Cambio respecto a `SLACK_AGENTS_CHANNEL` (un solo canal `agentes-ia` para todo): **cada cliente
+tiene su propio canal privado, exclusivo para Daniel + su Agente Técnico** (ej. un canal para
+Spectrum, otro para Grupo Paz cuando se sume, otro para Belize, etc.) — pensado para que RedTec
+pueda monitorear cada relación cliente↔técnico por separado, no todo mezclado en un solo feed.
+
+Esto reemplaza los env vars únicos `SLACK_AGENTS_CHANNEL`/`SLACK_TECH_AGENT_USER_ID`/
+`TECH_AGENT_CLIENTE_SOPORTADO` (pensados para un solo cliente) por una **tabla de ruteo por
+cliente**:
+
+```ts
+type TechAgentConfig = {
+  empresa: string;          // debe matchear profile.empresa, case-insensitive (mismo criterio que hoy)
+  slackChannel: string;     // canal privado dedicado a este par cliente↔técnico
+  slackBotUserId: string;   // bot_id de la instancia de Hermes Agent de este cliente
+};
+
+const TECH_AGENTS: TechAgentConfig[] = [
+  { empresa: "Spectrum", slackChannel: "tecnico-spectrum", slackBotUserId: "U..." },
+  // { empresa: "Grupo Paz", slackChannel: "tecnico-grupo-paz", slackBotUserId: "U..." },
+];
+```
+
+El gating por cliente (`daniel.ts`) y la resolución de canal (`consult-tech-agent.ts`) buscan la
+fila que corresponde a `profile.empresa` en vez de comparar contra un único valor fijo. Sumar un
+segundo cliente es agregar una fila a la tabla, no reescribir la lógica de gating/correlación.
+**No implementado todavía** — reemplaza `A.6` (env vars nuevas) tal como está escrito arriba.
+
+### E.4 — Qué queda pendiente de esta sección
+
+- Instalar/configurar una instancia real de Hermes Agent en un VPS (probablemente uno nuevo, no
+  el mismo VPS de Daniel, para aislar fallos) — paso manual de Jorge.
+- Verificar en la práctica el gap de seguridad de E.1 (scoping por canal).
+- Definir dónde vive `TECH_AGENTS` (¿hardcodeado en código, como `customers.json` antes de
+  migrar a Mongo? ¿en la colección `customers` de Mongo, agregando los campos `slackChannel`/
+  `slackBotUserId` al perfil de la empresa? — sin decidir todavía).
+- Diseño de las tools de solo lectura sobre la MongoDB de Spectrum (conversaciones/leads/
+  appointments) — sigue pendiente, sin esquema real todavía (ver conversación de esta sesión).
+- Reemplazar el código de A.3/A.4 (webhook) por el handler de Slack con mención (E.2) — sin
+  tocar todavía, a propósito.
 
 ## Supuestos a confirmar con Jorge antes de construir (quedan documentados, no bloquean el plan)
 
