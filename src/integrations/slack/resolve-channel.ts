@@ -2,8 +2,8 @@ import type { WebClient } from "@slack/web-api";
 
 // Resuelve el nombre de un canal de Slack a su ID (necesario para chat.postMessage), con
 // caché por nombre de canal — mismo patrón que ya usaba notify-escalation.ts para #escalacion,
-// generalizado para que otras tools (ej. consultar_agente_tecnico) no reimplementen la misma
-// paginación de conversations.list.
+// generalizado para que otros callers (ej. notifyTechAgent en consult-tech-agent.ts) no
+// reimplementen la misma paginación de conversations.list.
 const cachedChannelIds = new Map<string, string>();
 
 export function _resetChannelCacheForTests(): void {

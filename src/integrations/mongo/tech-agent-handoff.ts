@@ -8,6 +8,7 @@ export type TechAgentHandoffDoc = {
   originalSlackUserId: string; // cliente (ej. Spectrum)
   originalChannelId: string; // DM o canal donde responderle al cliente
   resumenProblema: string;
+  mondayItemId: string; // ticket real que originó esta consulta — ver agent/deliver-tech-diagnosis.ts
   status: TechAgentHandoffStatus;
   causaRaiz?: string;
   componenteAfectado?: string;
@@ -19,9 +20,11 @@ export type TechAgentHandoffDoc = {
 const COLLECTION = "tech_agent_handoffs";
 
 // Handoff de un diagnóstico delegado al Agente Técnico (ver
-// plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección A.2). threadTs es la única query
-// real de esta colección — es lo que un handler futuro (A.3, todavía sin construir) usará para
-// ubicar a qué conversación de cliente corresponde la respuesta que llegue en ese hilo.
+// plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E). Se crea determinísticamente al
+// crear un ticket real para un cliente con Agente Técnico configurado (agent/tools/escalate-to-monday.ts,
+// vía notifyTechAgent en consult-tech-agent.ts) — ya no depende de que el modelo elija llamar
+// una tool aparte. threadTs es la clave que usa channels/slack/tech-agent-response-handler.ts
+// para ubicar a qué conversación de cliente corresponde la respuesta que llegue en ese hilo.
 export async function createHandoff(fields: Omit<TechAgentHandoffDoc, "status" | "createdAt">): Promise<void> {
   const db = await getDb();
   await db.collection<TechAgentHandoffDoc>(COLLECTION).insertOne({

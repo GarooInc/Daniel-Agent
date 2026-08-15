@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TechAgentConfig } from "../../config/tech-agents.js";
 
 const createSupportTicket = vi.fn();
-// Estos cuatro se encadenan con .catch() en el código real (best-effort, fire-and-forget),
-// así que necesitan devolver siempre una promesa igual que lo haría la implementación real.
+// Estos se encadenan con .catch() en el código real (best-effort, fire-and-forget), así que
+// necesitan devolver siempre una promesa igual que lo haría la implementación real.
 const notifyEscalation = vi.fn().mockResolvedValue(undefined);
 const saveCustomerProfile = vi.fn().mockResolvedValue(undefined);
 const clearHistory = vi.fn().mockResolvedValue(undefined);
 const clearTicketDraft = vi.fn().mockResolvedValue(undefined);
 const saveTicketDraftFields = vi.fn().mockResolvedValue(undefined);
 const saveTicketConversation = vi.fn().mockResolvedValue(undefined);
+const notifyTechAgent = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../../integrations/monday/index.js", () => ({ createSupportTicket }));
 vi.mock("../../integrations/slack/notify-escalation.js", () => ({ notifyEscalation }));
@@ -16,6 +18,7 @@ vi.mock("../../integrations/mongo/customer-profile.js", () => ({ saveCustomerPro
 vi.mock("../../integrations/mongo/conversation-memory.js", () => ({ clearHistory }));
 vi.mock("../../integrations/mongo/ticket-draft.js", () => ({ clearTicketDraft, saveTicketDraftFields }));
 vi.mock("../../integrations/mongo/ticket-conversations.js", () => ({ saveTicketConversation }));
+vi.mock("./consult-tech-agent.js", () => ({ notifyTechAgent }));
 
 const { createEscalateToMondayTool } = await import("./escalate-to-monday.js");
 
@@ -26,6 +29,12 @@ const COMPLETE_DRAFT = {
   urgencia: "Urgente" as const,
   tipoSolicitud: "Problema" as const,
   producto: "Sofi" as const,
+};
+
+const FAKE_TECH_AGENT_CONFIG: TechAgentConfig = {
+  empresa: "Spectrum",
+  slackChannel: "tecnico-spectrum",
+  slackBotUserId: "U_TECH_AGENT",
 };
 
 describe("escalar_a_monday tool", () => {
@@ -77,6 +86,46 @@ describe("escalar_a_monday tool", () => {
     expect(clearHistory).not.toHaveBeenCalled();
     expect(notifyEscalation).not.toHaveBeenCalled();
     expect(saveTicketConversation).not.toHaveBeenCalled();
+    expect(notifyTechAgent).not.toHaveBeenCalled();
     expect(result).toContain("No se pudo crear el ticket");
+  });
+
+  it("avisa determinísticamente al Agente Técnico cuando hay client y techAgentConfig", async () => {
+    createSupportTicket.mockResolvedValue("3200000002");
+    const client = {} as any;
+    const tool = createEscalateToMondayTool("U123", COMPLETE_DRAFT, "C123", client, FAKE_TECH_AGENT_CONFIG);
+
+    await tool.invoke({});
+
+    expect(notifyTechAgent).toHaveBeenCalledWith(
+      client,
+      "U123",
+      "C123",
+      FAKE_TECH_AGENT_CONFIG,
+      expect.stringContaining(COMPLETE_DRAFT.resumen),
+      "3200000002",
+    );
+  });
+
+  it("no avisa al Agente Técnico si falta el client o el techAgentConfig", async () => {
+    createSupportTicket.mockResolvedValue("3200000003");
+    const toolSinClient = createEscalateToMondayTool("U123", COMPLETE_DRAFT, "C123", undefined, FAKE_TECH_AGENT_CONFIG);
+    await toolSinClient.invoke({});
+
+    const toolSinConfig = createEscalateToMondayTool("U123", COMPLETE_DRAFT, "C123", {} as any, undefined);
+    await toolSinConfig.invoke({});
+
+    expect(notifyTechAgent).not.toHaveBeenCalled();
+  });
+
+  it("el ticket se crea igual aunque notifyTechAgent falle", async () => {
+    createSupportTicket.mockResolvedValue("3200000004");
+    notifyTechAgent.mockRejectedValue(new Error("Slack API error: boom"));
+    const client = {} as any;
+    const tool = createEscalateToMondayTool("U123", COMPLETE_DRAFT, "C123", client, FAKE_TECH_AGENT_CONFIG);
+
+    const result = await tool.invoke({});
+
+    expect(result).toBe("Ticket creado en Monday.com con id 3200000004.");
   });
 });

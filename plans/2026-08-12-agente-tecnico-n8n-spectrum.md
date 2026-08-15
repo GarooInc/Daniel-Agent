@@ -1,5 +1,16 @@
 # Plan: Agente Técnico para Daniel (caso guía: Spectrum / n8n) vía canal Slack compartido
 
+> **Actualización 2026-08-15 — la tool `consultar_agente_tecnico` (A.1, E.2) fue reemplazada por
+> un disparo determinístico.** En la primera prueba en vivo del wiring de la sección E, el
+> modelo escaló un problema técnico directo a un ticket de Monday sin nunca llamar a la tool —
+> confirmó el mismo riesgo que ya motivó `extractTicketFields`/`mergeTicketFields` en otras
+> partes de este proyecto: no confiarle al LLM una decisión de negocio crítica. Ahora la consulta
+> al Técnico es un efecto secundario automático de `escalar_a_monday` (ya no hay una tool aparte
+> que el modelo elija), y Daniel además actualiza el ticket real en Monday cuando llega el
+> diagnóstico (comentario siempre, estado "Listo" si se resolvió). Ver `ESTADO-PROYECTO.md`,
+> punto 12, para el detalle completo — no reabrir A.1/E.2 tal como están escritos abajo sin leer
+> eso primero.
+
 ## Contexto
 
 Hoy Daniel solo puede resolver con su base de conocimiento o escalar a un ticket de Monday.

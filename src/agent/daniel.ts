@@ -104,12 +104,14 @@ export async function askDaniel(
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
   // Gating por cliente (decisión #3 de plans/2026-08-12-agente-tecnico-n8n-spectrum.md, ruteo
-  // por tabla ver sección E.3): consultar_agente_tecnico solo se ofrece si el cliente tiene un
-  // Agente Técnico configurado (findTechAgentConfig busca por profile.empresa). Si todavía no se
-  // conoce el perfil (cliente nuevo, para no bloquear el primer contacto) y hay exactamente un
-  // cliente configurado, se usa ese por default — con más de un cliente en TECH_AGENTS, un
-  // perfil desconocido no puede resolver la ambigüedad y la tool no se ofrece hasta identificar
-  // la empresa (aceptable mientras solo haya un cliente soportado).
+  // por tabla ver sección E.3): se resuelve el Agente Técnico del cliente (findTechAgentConfig
+  // busca por profile.empresa) para pasárselo a escalar_a_monday — ya no es una tool aparte que
+  // el modelo elija (ver escalate-to-monday.ts/consult-tech-agent.ts, hallazgo 2026-08-14/15).
+  // Si todavía no se conoce el perfil (cliente nuevo, para no bloquear el primer contacto) y hay
+  // exactamente un cliente configurado, se usa ese por default — con más de un cliente en
+  // TECH_AGENTS, un perfil desconocido no puede resolver la ambigüedad y el ticket no dispara el
+  // aviso al Técnico hasta identificar la empresa (aceptable mientras solo haya un cliente
+  // soportado).
   const techAgentConfig =
     findTechAgentConfig(profile?.empresa) ?? (!profile?.empresa && TECH_AGENTS.length === 1 ? TECH_AGENTS[0] : undefined);
 

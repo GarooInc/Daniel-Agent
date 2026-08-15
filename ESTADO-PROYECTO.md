@@ -58,15 +58,15 @@ src/
     daniel.ts                 # loop de tool-calling → askDaniel()
     extract-ticket-fields.ts   # extracción automática de datos del ticket en cada mensaje
     extract-tech-diagnosis.ts    # extracción del diagnóstico del Agente Técnico, ver Pendiente #12
-    deliver-tech-diagnosis.ts     # entrega diferida del diagnóstico al cliente, ver Pendiente #12
+    deliver-tech-diagnosis.ts     # entrega diferida del diagnóstico al cliente + actualiza el ticket en Monday, ver Pendiente #12
     auto-escalate.ts            # escalación real cuando askDaniel falla o se agota
     index.ts
     tools/
       search-faqs.ts
       lookup-customer.ts
       platform-health.ts        # estado_de_la_plataforma: lee platform_metrics (Mongo), nunca el socket en vivo
-      escalate-to-monday.ts
-      consult-tech-agent.ts      # consultar_agente_tecnico: handoff al Agente Técnico, ver Pendiente #12
+      escalate-to-monday.ts      # escalar_a_monday: también dispara notifyTechAgent tras crear el ticket, ver Pendiente #12
+      consult-tech-agent.ts      # notifyTechAgent(): ya NO es una tool del modelo, función plana llamada desde escalate-to-monday.ts, ver Pendiente #12
       ticket-fields.ts          # campos requeridos, merge compartido, labels
       index.ts
 
@@ -74,17 +74,23 @@ src/
     slack/
       bot.ts
       message-handler.ts
+      dedupe.ts                # wasAlreadyProcessed(): dedupe de client_msg_id, compartido con tech-agent-response-handler.ts
+      tech-agent-response-handler.ts # escucha la mención de vuelta del Técnico en su canal privado, ver Pendiente #12
+      format.ts
       index.ts
-    webhook/                # nuevo 2026-08-11: entrada HTTP genérica (no Slack), ver más abajo
+    webhook/                # nuevo 2026-08-11: entrada HTTP genérica (no Slack), ver más abajo — 100% genérico de nuevo desde el 2026-08-14 (el despacho por body.type del Agente Técnico quedó superseded, ver Pendiente #12)
       server.ts
-      handle-tech-agent-diagnosis.ts # despacha body.type === "tech_agent_diagnosis", ver Pendiente #12
       index.ts
+
+  config/
+    tech-agents.ts          # TECH_AGENTS: tabla de ruteo cliente -> canal privado + bot del Agente Técnico
 
   integrations/           # servicios externos a los que Daniel llama (no clientes hablándole a él)
     monday/
       client.ts             # helper GraphQL genérico contra api.monday.com/v2
       board.ts                # IDs del board y columnas del tablero de soporte
       create-ticket.ts         # createSupportTicket(), enums de urgencia/tipo/producto
+      ticket-updates.ts          # addTicketUpdate()/markTicketReady(): Daniel actualiza el ticket real cuando llega el diagnóstico del Técnico, ver Pendiente #12
       index.ts
     mongo/
       client.ts               # conexión lazy a MongoDB Atlas
@@ -92,11 +98,11 @@ src/
       customer-profile.ts        # customers (antes "users"): perfil + cuenta real, clave email
       ticket-draft.ts              # ticket_drafts: borrador de ticket en construcción
       ticket-conversations.ts       # ticket_conversations: correlación mondayItemId -> slackUserId/canal, ver Pendiente #13
-      tech-agent-handoff.ts          # tech_agent_handoffs: handoff Daniel↔Agente Técnico por threadTs (Mongo), ver Pendiente #12
+      tech-agent-handoff.ts          # tech_agent_handoffs: handoff Daniel↔Agente Técnico por threadTs (Mongo), incluye mondayItemId, ver Pendiente #12
       webhook-events.ts             # webhook_raw_events: payloads crudos del webhook, ver abajo
     slack/
       notify-escalation.ts     # avisa cada ticket creado en el canal #escalacion
-      resolve-channel.ts        # resuelve nombre de canal -> ID, con caché (usado por consult-tech-agent.ts)
+      resolve-channel.ts        # resuelve nombre de canal -> ID, con caché (usado por notifyTechAgent en consult-tech-agent.ts)
     redtec-realtime/          # WebSocket de tiempo real de RedTec Realstate (socket.io), ver abajo
       client.ts                 # conexión singleton, no bloqueante si faltan credenciales
       platform-metrics.ts        # persiste container.stats en Mongo (platform_metrics, TTL 7 días) + consultas por ventana
@@ -113,6 +119,7 @@ plans/                    # planes de features grandes (Markdown), commiteados a
   2026-08-12-estructura-datos-clientes-e-ingesta-externa.md   # diseño de la migración a la colección unificada `customers`
   2026-08-12-agente-tecnico-n8n-spectrum.md   # diseño de un segundo agente IA (Hermes Agent) que audita n8n vía MCP y se comunica con Daniel 100% por Slack — sección E es la vigente
   2026-08-14-agente-tecnico-wiring-daniel.md  # plan de la sesión que implementó el wiring del lado Daniel de la sección E de arriba (ya implementado)
+  2026-08-15-tech-agent-disparo-determinista-y-actualizacion-monday.md   # reemplaza consultar_agente_tecnico (tool elegida por el modelo) por un disparo determinístico desde escalar_a_monday + Daniel actualiza el ticket real en Monday (ya implementado)
 ```
 
 Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo canal (web widget, WhatsApp) → una carpeta nueva en `channels/`; nueva integración externa (CRM, etc.) → una carpeta nueva en `integrations/`; nueva fuente de datos real → reemplazar la implementación en `knowledge-base/` sin tocar el resto.
@@ -215,6 +222,26 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
   - **Env vars**: `env.ts` ya no expone `slackAgentsChannel`/`slackTechAgentUserId`/`techAgentClienteSoportado` (las lee `config/tech-agents.ts` directo, por cliente: `TECH_AGENT_SPECTRUM_CHANNEL`/`TECH_AGENT_SPECTRUM_BOT_USER_ID`). `.env.example` actualizado.
   - Type-check limpio, 60/60 tests verdes (tests de `consult-tech-agent` actualizados para pasar un `TechAgentConfig` fake; 5 nuevos en `tech-agent-response-handler.test.ts`; se restan los 4 de `handle-tech-agent-diagnosis.test.ts`, borrado junto con el código que testeaba).
   - **Pendiente real, todavía sin hacer**: cargar el `slackBotUserId` real de "Tecnico Spectrum" en `TECH_AGENT_SPECTRUM_BOT_USER_ID` (Coolify) — sin eso, la tool sigue sin poder mencionar al Técnico. Confirmar en vivo el flujo completo (Daniel delega → Técnico menciona a Daniel en `tecnico-spectrum` → cliente original recibe el diagnóstico). Restringir `tools.include` de Hermes a solo lectura (diferido, es config del lado de Hermes). A.5 (timeout) sigue sin construir.
+- [x] **Retest en vivo del wiring — deploy confirmado, un bug real encontrado (no relacionado), y alcance del Técnico acotado a los 4 workflows del Data Agent (2026-08-14/15)**:
+  - **`TECH_AGENT_SPECTRUM_BOT_USER_ID` cargado**: el bot user ID real de "Tecnico Spectrum" es `U0BPX4BACH5` (obtenido desde el panel "Acerca del canal" de `tecnico-spectrum` en Slack, sección "ID de miembro" — la app aparece categorizada como "AGENTE" en el cliente de Slack porque su manifest declara capacidades conversacionales, pero es una app de Slack normal como cualquier otra, con bot user ID igual que Daniel-Soporte). Cargado en Coolify y redeployado.
+  - **Deploy del código de esta sesión confirmado en vivo**: commit `f337fee` pusheado a `main`, Coolify lo tomó solo (`docker ps` en la VPS mostró el contenedor de Daniel con la imagen tageada exactamente `f337fee91a3d272c09f5947a2e523a35c86e6c36`, "Up 10 minutes").
+  - **Bug real encontrado en el retest, no relacionado al Agente Técnico — el debounce mezcla canales de un mismo usuario.** Jorge escribió por DM a Daniel una pregunta sobre el flujo de recolección de leads; Daniel la procesó bien (buscó en las FAQs, contestó una aclaración sobre Sofi vs. Isabella) pero **la respuesta se posteó en el canal `tecnico-spectrum`, no en el DM**. Causa: `messaging/debounce-queue.ts` arma el `jobId` de BullMQ solo con `source_userId` (sin el canal) — si el mismo `slackUserId` genera actividad en dos canales distintos dentro de la ventana de debounce (10s), el `channelId` guardado en el job se pisa con el último que llegó, y la respuesta (y el texto bufferizado) puede terminar mezclado/mal dirigido. **No arreglado todavía** — anotado como pendiente nuevo (ver más abajo), separado del trabajo del Agente Técnico.
+  - **Decisión de alcance de Jorge (2026-08-15): el Técnico audita solo los 4 workflows del "Data Agent" de Spectrum, no los 13 de "AGENTE-CENTRALIZADO".** Motivo: son bastante menos complejos y todavía no están en producción — mejor terreno de prueba antes de darle acceso a los workflows reales de cara al cliente. Carpeta real en n8n: `Personal / SPECTRUM / DATA-AGENT`, 4 workflows:
+    - `RNLfUdDZRbnVURUJ` — DataAgent - Core
+    - `AHfgaFMikEoLK7Va` — DataAgent - Mongo Query Tool
+    - `yTskjLij1y2QbFdK` — DataAgent - Slack Trigger
+    - `t9fDyF1aVCyCYkEk` — DataAgent - Weekly Summary
+  - **Hallazgo de infra — Hermes tiene una WebUI con memoria editable, no hace falta editar `SOUL.md` a mano por SSH.** El servicio `hermes-webui` (contenedor `hermes-webui-j8bcc91wucyzdg81qcr3o30h`) expone una sección **Memory** con "My Notes"/"User Profile"/**"Agent Soul"** — esta última es el mismo contenido que el archivo `SOUL.md`, editable con un botón de lápiz directo desde el navegador. Mucho más simple que el flujo documentado originalmente (`docker exec ... cat`/editar el archivo). El archivo real dentro del contenedor `hermes-agent-j8bcc91wucyzdg81qcr3o30h` es `/home/hermes/.hermes/SOUL.md` (corre como usuario `hermes`, no `root` — `/root/.hermes/SOUL.md` no existe; también hay una copia plantilla en `/opt/hermes/docker/SOUL.md`, no es la que se usa).
+  - **`SOUL.md` actualizado (vía la WebUI) reemplazando la lista de los 13 IDs de "AGENTE-CENTRALIZADO" por los 4 IDs del Data Agent de arriba**, con instrucción explícita de no auditar nada fuera de esa lista.
+  - **Gotcha de sesión cacheada (ya documentado el 2026-08-14) confirmado real de nuevo, y ya resuelto**: `hermes sessions list` mostró 4 sesiones activas de las últimas ~8h (una sin título de hace 52 min, una titulada "Consulta sobre rol y workflows" de hace 5h, y dos más sin título de hace 7h) — todas anteriores a la edición del `SOUL.md`, así que ninguna iba a tomar la lista nueva de workflows hasta borrarlas. Las 4 se borraron (`hermes sessions delete <id>`) — la próxima mención al Técnico arranca sesión nueva con el `SOUL.md` actualizado.
+  - **Prueba en vivo del flujo completo (Daniel delega → Técnico responde mencionando a Daniel → cliente recibe el diagnóstico) todavía no se completó** — quedó interrumpida por el bug de debounce de arriba antes de llegar a probar la escalación real, y después por el hallazgo de que el modelo ni siquiera llegó a delegar (ver el bullet siguiente).
+- [x] **Consulta al Agente Técnico deja de ser una tool que el modelo elige — pasa a ser efecto secundario determinístico de `escalar_a_monday` (2026-08-15)**: en el retest de arriba, Daniel escaló un problema técnico del Data Agent directo a un ticket de Monday **sin nunca llamar a `consultar_agente_tecnico`** — el modelo tuvo que elegir entre dos tools que compiten (la FAQ no cubría el caso, y ya tenía datos completos del ticket) y eligió mal, mismo patrón de "no confiarle al LLM una decisión de negocio crítica" que motivó `extractTicketFields`/`mergeTicketFields`/`esNombreDeProducto` en sesiones anteriores. Decisión de Jorge: sacar esa decisión del modelo.
+  - **`agent/tools/consult-tech-agent.ts` deja de ser una `tool()` de LangChain** — ahora exporta `notifyTechAgent(client, slackUserId, originalChannelId, config, resumenProblema, mondayItemId)`, función plana sin schema de zod (nadie la invoca por tool-calling). `tech_agent_handoffs` (`integrations/mongo/tech-agent-handoff.ts`) suma el campo `mondayItemId` — todo handoff nace desde un ticket real.
+  - **`escalate-to-monday.ts` dispara `notifyTechAgent` justo después de crear el ticket** (best-effort, `.catch()` con warning, mismo criterio que el resto de los efectos secundarios de una escalación) si hay `client` y `techAgentConfig` — ya no depende de que el modelo la llame. `tools/index.ts` ya no arma `consultar_agente_tecnico` como tool aparte (se borró el import); `daniel.ts` sigue calculando `techAgentConfig` igual que antes (`findTechAgentConfig`), solo cambia a qué función se lo pasa.
+  - **Daniel ahora también actualiza el ticket real en Monday cuando llega el diagnóstico** (pedido de Jorge, para que alguien de soporte que solo mira Monday —nunca Slack— vea el resultado): `integrations/monday/ticket-updates.ts` (nuevo) agrega `addTicketUpdate()` (mutación `create_update`, postea el diagnóstico crudo como comentario del item, siempre) y `markTicketReady()` (mutación `change_simple_column_value`, mueve la columna `Estado` a `"Listo"` — **solo** si `diagnosis.resuelto === true`). `board.ts` suma `estado: "status2"` a `SUPPORT_BOARD_COLUMNS`. **Labels reales del board confirmadas por API antes de escribir código** (mismo cuidado que con las demás columnas en sesiones anteriores — no asumir): `Estado` (`status2`) tiene `"En curso"` (default) / `"Listo"` / `"Enviado"` / `"Rechazado"`, sin ningún estado intermedio tipo "en revisión técnica", por eso no hay transición a mitad de camino. `deliver-tech-diagnosis.ts` llama a ambas, best-effort, sin bloquear ni arriesgar la entrega al cliente (ya construida) si Monday falla.
+  - Type-check limpio, 64/64 tests verdes (tests de `consult-tech-agent`/`escalate-to-monday`/`deliver-tech-diagnosis` actualizados o ampliados).
+  - **Confirmado sin tocar**: el orden de trabajo de Daniel (FAQ/estado de cuenta → intentar resolver directo → escalar solo si no se puede, `agent/prompt.ts`) ya era correcto y no necesitó ningún cambio — el bug era específicamente la competencia entre dos tools, no el orden general.
+  - **Pendiente, documentado a propósito para más adelante, no bloqueante**: timeout si el Técnico nunca responde (A.5); unificar `ticket_conversations`/`tech_agent_handoffs` en un solo modelo de "caso" (hoy son dos colecciones con propósito parecido); probar en vivo el flujo completo de punta a punta con este código ya deployado.
 ## Plan pendiente: debounce/cola de mensajes con Redis + KB vectorizada en Mongo Atlas (iniciado 2026-08-03)
 
 Decisión de Jorge (2026-08-03): la KB va a vivir vectorizada en MongoDB Atlas, y hace falta Redis en el VPS para debounce/cola de mensajes multi-línea (pensando en WhatsApp y otros canales de mensajería, donde un cliente manda varios mensajes seguidos que hoy dispararían varias llamadas paralelas a `askDaniel`). Orden acordado: **primero el debounce/cola (bloqueante para WhatsApp), después la KB vectorizada** (migrando el contenido ya existente de `faqs.json`/`customers.json`, no contenido nuevo).
@@ -433,12 +460,15 @@ También decidido el mismo día: convención estándar para datos que llegan de 
     **Wiring del lado Daniel — HECHO (2026-08-14, más tarde el mismo día, ver el bullet correspondiente en "Estado actual" para el detalle completo)**: `tech-agent-response-handler.ts` reemplaza el webhook de correlación, `consult-tech-agent.ts`/`tools/index.ts`/`daniel.ts` usan `TechAgentConfig`/`findTechAgentConfig()` en vez de los env vars únicos, y se removió `handle-tech-agent-diagnosis.ts` + el despacho en `webhook/server.ts`. Type-check limpio, 60/60 tests verdes.
 
     **Sigue pendiente, real**:
-    - Cargar el `slackBotUserId` real del bot "Tecnico Spectrum" en `TECH_AGENT_SPECTRUM_BOT_USER_ID` (Coolify) — sin esto, `consult-tech-agent.ts` no puede mencionarlo (falla con el mensaje genérico de "no tengo forma de contactar al equipo técnico").
-    - Probar en vivo el flujo completo: Daniel delega en un cliente con `empresa: "Spectrum"` → el Técnico responde mencionando a Daniel en `tecnico-spectrum` → el cliente original recibe el diagnóstico.
+    - ~~Cargar el `slackBotUserId` real del bot "Tecnico Spectrum" en `TECH_AGENT_SPECTRUM_BOT_USER_ID` (Coolify)~~ — **hecho (2026-08-15)**: `U0BPX4BACH5`, cargado y redeployado.
+    - ~~Restringir el alcance del Técnico~~ — **hecho (2026-08-15), pero acotado más de lo que decía el plan original**: en vez de los 13 workflows de "AGENTE-CENTRALIZADO", el Técnico audita solo los 4 del Data Agent de Spectrum (menos complejos, todavía no en producción — decisión de Jorge). `SOUL.md` actualizado vía la WebUI de Hermes (sección Memory → Agent Soul).
+    - **Pendiente inmediato**: borrar las sesiones viejas de Hermes (`hermes sessions delete <id>`, ver "Estado actual" para los IDs) para que la próxima mención tome el `SOUL.md` nuevo — el cambio de arriba no se refleja en una conversación ya iniciada.
+    - ~~La tool `consultar_agente_tecnico` que el modelo debía elegir llamar~~ — **rediseñado (2026-08-15)**: en el primer intento de prueba en vivo, el modelo escaló el problema a un ticket de Monday sin nunca consultar al Técnico. Se sacó esa decisión del LLM — ver el bullet correspondiente en "Estado actual" para el detalle completo (ahora es un efecto secundario determinístico de `escalar_a_monday`, y Daniel también actualiza el ticket real en Monday cuando llega el diagnóstico).
+    - Probar en vivo el flujo completo con el código ya determinístico: Daniel crea el ticket → se avisa solo al Técnico en `tecnico-spectrum` → el Técnico responde mencionando a Daniel → el cliente original recibe el diagnóstico → el ticket de Monday queda con el comentario (y, si se resolvió, en estado "Listo"). Sigue sin probarse de punta a punta — los intentos anteriores se interrumpieron primero por el bug de debounce (punto 16) y después por el hallazgo de arriba.
     - **Todavía sin resolver, y ya no es teórico**: el `registerMessageHandler` normal de Daniel podría dispararse también con mensajes del canal `tecnico-spectrum` si mencionan al bot de Daniel — el plan lo aceptó como no bloqueante, pero conviene confirmarlo con una prueba real antes de dar este punto por cerrado.
-    - Restringir `tools.include` de Hermes a solo lectura (diferido a propósito, es config del lado de Hermes — ver "Estado actual").
     - A.5 (timeout si el Técnico no responde) sigue sin construir.
-    - **Restringir permisos del MCP de n8n** (diferido a propósito el 2026-08-14): hoy las 33 tools de `mcp_servers.n8n-spectrum` están habilitadas en `config.yaml`, incluidas las de escritura — recortar a la lista de solo lectura (ver detalle en "Estado actual").
+    - **Restringir permisos de escritura del MCP de n8n en Hermes** (diferido a propósito el 2026-08-14): hoy las 33 tools de `mcp_servers.n8n-spectrum` están habilitadas en `config.yaml`, incluidas las de escritura — recortar a la lista de solo lectura. No confundir con el acotamiento de *qué workflows* audita (eso ya se hizo, ver arriba) — esto es sobre *qué herramientas* tiene disponibles.
+    - Unificar `ticket_conversations`/`tech_agent_handoffs` en un solo modelo de "caso" — hoy son dos colecciones con propósito parecido (`mondayItemId`/`threadTs` → conversación de Slack), quedó documentado como mejora futura, no bloqueante.
 
 13. **Primeros datos reales llegaron al webhook (2026-08-13) — evento `ticket.status_changed`, uso decidido, correlación todavía sin resolver.** Dos POSTs a `/webhook/internal` (`user-agent: node`, IP `2.25.209.174`, secreto correcto — emisor autorizado) con payload `{event: "ticket.status_changed", ticket_id, title, status, project_id, contact_id}`, título "Ticket de prueba webhook Monday". Jorge confirmó: viene de un sistema **interno de la empresa** que reenvía eventos de Monday (no necesariamente el webhook nativo de Monday), y la acción deseada cuando llegue un evento real (no de prueba) es que **Daniel avise proactivamente al cliente en Slack** cuando su ticket cambia a un estado relevante — cerrar el loop que hoy es de una sola vía (Daniel escala y nunca se entera de qué pasó después).
     - **Bloqueante real, confirmado con Jorge: no se sabe todavía si `ticket_id` es el item ID real de Monday o una numeración propia de ese sistema interno** (el payload de prueba tenía `"ticket_id": 1`, que no tiene la forma de un item ID real de Monday — esos son de 9-10 dígitos, ej. `3141838626`). Falta preguntarle a quien envía el webhook. Idealmente, en vez de depender de que algún numérico coincida, pedirle que incluya en el payload un dato que Daniel ya pueda usar para correlacionar directamente (el más simple: el email del cliente, que ya es la clave de la colección `customers`).
@@ -449,6 +479,8 @@ También decidido el mismo día: convención estándar para datos que llegan de 
 14. **Conseguir un dominio propio para HTTPS real en el webhook** — hoy corre en `http://` sobre el dominio `*.sslip.io` autogenerado por Coolify porque Let's Encrypt rate-limitea esos dominios compartidos (ver arriba). Mientras el tráfico sea interno y de bajo volumen no es bloqueante, pero si esto se vuelve permanente o crece en sensibilidad de los datos, conviene apuntar un subdominio propio (ej. de `garooinc.com`) al VPS.
 
 15. **Nota suelta (2026-08-13, audio relayado por Jorge), sin contexto suficiente para actuar todavía**: "para los clientes que entran de Fase 1 del lado de WhatsApp, hay que poner la campaña `webpage` (mandada por proyecto) y su subcampaña `webpage_chat`, solo para los de Fase 1 que entran por WhatsApp." No existe ningún campo `campaña`/`subcampaña` en el codebase hoy (ni en `customers`/`customer-profile.ts` ni en ningún plan) — Daniel tampoco tiene canal de WhatsApp todavía (solo Slack; WhatsApp está mencionado como motivación futura del debounce con Redis, no implementado). Se deja documentado tal cual llegó, sin intentar mapearlo a nada existente, hasta tener más contexto de a qué sistema/colección se refiere.
+
+16. **Bug real encontrado en vivo (2026-08-14/15), sin arreglar todavía: el debounce mezcla canales de un mismo usuario.** `messaging/debounce-queue.ts` arma el `jobId` de BullMQ solo con `source_userId` — no incluye el canal. Si el mismo `slackUserId` genera actividad en dos canales distintos (ej. un DM y un canal donde también participa) dentro de la ventana de debounce (`DEBOUNCE_MS`, 10s en producción), el `channelId` guardado en el job in-flight se pisa con el del mensaje más reciente, y la respuesta (con el texto de ambos mensajes bufferizados, unidos con `\n`) puede terminar posteada en el canal equivocado. Confirmado en vivo: una pregunta hecha por DM a Daniel se contestó en `tecnico-spectrum` en cambio. **Fix pendiente, no diseñado todavía**: el `jobId`/la clave del buffer de Redis probablemente necesitan incluir el canal (`source_userId_channelId`), no solo el usuario — a evaluar el impacto en la lógica de "un solo hilo de conversación por usuario" que asume hoy el resto del código (`ticket_drafts`/`chat_histories` sí son por `slackUserId` sin canal, a propósito, así que hay que pensar si separar el debounce por canal rompe esa continuidad o no).
 
 ## Referencia rápida del stack
 

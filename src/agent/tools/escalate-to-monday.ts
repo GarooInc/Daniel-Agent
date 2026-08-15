@@ -1,4 +1,5 @@
 import { tool } from "@langchain/core/tools";
+import type { WebClient } from "@slack/web-api";
 import { z } from "zod";
 import { createSupportTicket } from "../../integrations/monday/index.js";
 import { URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "../../integrations/monday/create-ticket.js";
@@ -8,6 +9,8 @@ import { clearHistory } from "../../integrations/mongo/conversation-memory.js";
 import { clearTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
 import { saveTicketConversation } from "../../integrations/mongo/ticket-conversations.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./ticket-fields.js";
+import { notifyTechAgent } from "./consult-tech-agent.js";
+import type { TechAgentConfig } from "../../config/tech-agents.js";
 import { logger } from "../../config/logger.js";
 
 // Factory en vez de tool estática: recibe el slackUserId (para guardar el perfil/borrador)
@@ -15,11 +18,19 @@ import { logger } from "../../config/logger.js";
 // fetch+merge de Mongo que daniel.ts ya hizo momentos antes). Se puede llamar con datos
 // parciales o sin argumentos en cualquier momento — si algo falta, lo dice y lo recuerda.
 // channelId es para poder avisarle después al cliente si algo externo notifica un cambio de
-// estado del ticket (ver ticket-conversations.ts) — no se usa para nada más acá.
+// estado del ticket (ver ticket-conversations.ts), y también es donde le llega al cliente el
+// eventual diagnóstico del Agente Técnico. client/techAgentConfig son para poder avisarle al
+// Técnico apenas se crea el ticket (ver plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección
+// E) — determinístico, ya no depende de que el modelo elija consultar al Técnico por su cuenta
+// (hallazgo en vivo 2026-08-14/15: el modelo escaló un problema técnico a un ticket humano sin
+// nunca consultarlo). Ambos son opcionales porque no siempre hay client de Slack disponible
+// (agent-cli.ts) ni el cliente tiene un Agente Técnico configurado.
 export function createEscalateToMondayTool(
   slackUserId: string,
   effectiveDraft: TicketDraftFields,
   channelId: string,
+  client?: WebClient,
+  techAgentConfig?: TechAgentConfig,
   onTicketCreated?: () => void,
 ) {
   return tool(
@@ -57,6 +68,18 @@ export function createEscalateToMondayTool(
         saveTicketConversation(ticketId, slackUserId, channelId).catch((error) => {
           logger.warn({ err: error, ticketId, slackUserId }, "No se pudo guardar la correlación ticket↔conversación");
         });
+        if (client && techAgentConfig) {
+          notifyTechAgent(
+            client,
+            slackUserId,
+            channelId,
+            techAgentConfig,
+            `${ticket.resumen}\n\nQué se intentó: ${ticket.queSeIntentoYa}`,
+            ticketId,
+          ).catch((error) => {
+            logger.warn({ err: error, ticketId }, "No se pudo notificar al Agente Técnico sobre el ticket nuevo");
+          });
+        }
         if (onTicketCreated) {
           onTicketCreated();
         } else {

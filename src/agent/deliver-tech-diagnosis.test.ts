@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const extractTechDiagnosis = vi.fn();
 const markHandoffAnswered = vi.fn().mockResolvedValue(undefined);
 const appendMessage = vi.fn().mockResolvedValue(undefined);
+const addTicketUpdate = vi.fn().mockResolvedValue(undefined);
+const markTicketReady = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("./extract-tech-diagnosis.js", () => ({ extractTechDiagnosis }));
 vi.mock("../integrations/mongo/tech-agent-handoff.js", () => ({ markHandoffAnswered }));
 vi.mock("../integrations/mongo/conversation-memory.js", () => ({ appendMessage }));
+vi.mock("../integrations/monday/index.js", () => ({ addTicketUpdate, markTicketReady }));
 
 const { deliverTechDiagnosis } = await import("./deliver-tech-diagnosis.js");
 
@@ -16,6 +19,7 @@ const HANDOFF = {
   originalSlackUserId: "U_CLIENTE",
   originalChannelId: "C_CLIENTE_DM",
   resumenProblema: "El flujo de n8n falla al recibir un lead",
+  mondayItemId: "3200000000",
   status: "pending" as const,
   createdAt: new Date(),
 };
@@ -53,9 +57,11 @@ describe("deliverTechDiagnosis", () => {
       }),
     );
     expect(appendMessage).toHaveBeenCalledWith("U_CLIENTE", "ai", expect.stringContaining("revisó tu caso"));
+    expect(addTicketUpdate).toHaveBeenCalledWith("3200000000", expect.stringContaining("el nodo Webhook explota"));
+    expect(markTicketReady).toHaveBeenCalledWith("3200000000");
   });
 
-  it("avisa que sigue investigando cuando el diagnóstico todavía no es concreto", async () => {
+  it("avisa que sigue investigando cuando el diagnóstico todavía no es concreto, y no marca el ticket como Listo", async () => {
     extractTechDiagnosis.mockResolvedValue({
       resuelto: false,
       resumenParaCliente: "seguimos revisando el flujo, todavía no encontramos la causa exacta",
@@ -66,11 +72,23 @@ describe("deliverTechDiagnosis", () => {
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("está investigando tu caso") }));
     expect(appendMessage).toHaveBeenCalledWith("U_CLIENTE", "ai", expect.stringContaining("investigando"));
+    expect(addTicketUpdate).toHaveBeenCalledWith("3200000000", expect.stringContaining("todavía estoy revisando"));
+    expect(markTicketReady).not.toHaveBeenCalled();
   });
 
   it("no pierde la entrega al cliente si falla el guardado en el historial", async () => {
     extractTechDiagnosis.mockResolvedValue({ resuelto: true, resumenParaCliente: "listo" });
     appendMessage.mockRejectedValue(new Error("Mongo timeout"));
+    const client = fakeClient();
+
+    await expect(deliverTechDiagnosis(client, HANDOFF, "listo")).resolves.toBeUndefined();
+    expect(client.chat.postMessage).toHaveBeenCalled();
+  });
+
+  it("no pierde la entrega al cliente si falla la actualización del ticket en Monday", async () => {
+    extractTechDiagnosis.mockResolvedValue({ resuelto: true, resumenParaCliente: "listo" });
+    addTicketUpdate.mockRejectedValue(new Error("Monday API error: boom"));
+    markTicketReady.mockRejectedValue(new Error("Monday API error: boom"));
     const client = fakeClient();
 
     await expect(deliverTechDiagnosis(client, HANDOFF, "listo")).resolves.toBeUndefined();

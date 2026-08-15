@@ -7,7 +7,7 @@ const resolveChannelId = vi.fn();
 vi.mock("../../integrations/mongo/tech-agent-handoff.js", () => ({ createHandoff }));
 vi.mock("../../integrations/slack/resolve-channel.js", () => ({ resolveChannelId }));
 
-const { createConsultTechAgentTool } = await import("./consult-tech-agent.js");
+const { notifyTechAgent } = await import("./consult-tech-agent.js");
 
 function fakeClient(postMessageResult: { ts: string } = { ts: "1699999999.000100" }) {
   return {
@@ -21,17 +21,16 @@ const FAKE_CONFIG: TechAgentConfig = {
   slackBotUserId: "U_TECH_AGENT",
 };
 
-describe("consultar_agente_tecnico tool", () => {
+describe("notifyTechAgent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("posta en el canal privado del cliente y guarda el handoff cuando todo está configurado", async () => {
+  it("posta en el canal privado del cliente y guarda el handoff con el mondayItemId cuando todo está configurado", async () => {
     resolveChannelId.mockResolvedValue("C_AGENTES");
     const client = fakeClient({ ts: "1699999999.000100" });
-    const tool = createConsultTechAgentTool(client, "U_CLIENTE", "C_CLIENTE_DM", FAKE_CONFIG);
 
-    const result = await tool.invoke({ resumenProblema: "El flujo de n8n falla al recibir un lead" });
+    await notifyTechAgent(client, "U_CLIENTE", "C_CLIENTE_DM", FAKE_CONFIG, "El flujo de n8n falla al recibir un lead", "3200000000");
 
     expect(resolveChannelId).toHaveBeenCalledWith(client, "tecnico-spectrum");
     expect(client.chat.postMessage).toHaveBeenCalledWith(
@@ -40,37 +39,34 @@ describe("consultar_agente_tecnico tool", () => {
         text: expect.stringContaining("<@U_TECH_AGENT>"),
       }),
     );
+    expect(client.chat.postMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("#3200000000") }));
     expect(createHandoff).toHaveBeenCalledWith({
       threadTs: "1699999999.000100",
       sharedChannelId: "C_AGENTES",
       originalSlackUserId: "U_CLIENTE",
       originalChannelId: "C_CLIENTE_DM",
       resumenProblema: "El flujo de n8n falla al recibir un lead",
+      mondayItemId: "3200000000",
     });
-    expect(result).toContain("Ya le pasé el caso al equipo técnico");
   });
 
   it("no falla si el config no tiene un bot user ID configurado", async () => {
     resolveChannelId.mockResolvedValue("C_AGENTES");
     const client = fakeClient();
-    const tool = createConsultTechAgentTool(client, "U_CLIENTE", "C_CLIENTE_DM", { ...FAKE_CONFIG, slackBotUserId: "" });
 
-    const result = await tool.invoke({ resumenProblema: "algo falló" });
+    await notifyTechAgent(client, "U_CLIENTE", "C_CLIENTE_DM", { ...FAKE_CONFIG, slackBotUserId: "" }, "algo falló", "3200000001");
 
     expect(client.chat.postMessage).not.toHaveBeenCalled();
     expect(createHandoff).not.toHaveBeenCalled();
-    expect(result).toContain("No tengo forma de contactar al equipo técnico");
   });
 
   it("no falla si no se encuentra el canal privado en Slack", async () => {
     resolveChannelId.mockResolvedValue(undefined);
     const client = fakeClient();
-    const tool = createConsultTechAgentTool(client, "U_CLIENTE", "C_CLIENTE_DM", FAKE_CONFIG);
 
-    const result = await tool.invoke({ resumenProblema: "algo falló" });
+    await notifyTechAgent(client, "U_CLIENTE", "C_CLIENTE_DM", FAKE_CONFIG, "algo falló", "3200000002");
 
     expect(client.chat.postMessage).not.toHaveBeenCalled();
     expect(createHandoff).not.toHaveBeenCalled();
-    expect(result).toContain("No tengo forma de contactar al equipo técnico");
   });
 });
