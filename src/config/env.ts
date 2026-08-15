@@ -35,10 +35,7 @@ export const env = {
   // otro cambio de código/redeploy. Ver integrations/redtec-realtime/client.ts.
   redtecRealtimeUrl: process.env.REDTEC_PLATFORM_WS_URL,
   redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET || process.env.SUPPORT_AGENT_WEBHOOK_SECRET,
-  // Agente Técnico (ver plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección A.6) — también
-  // opcional a propósito: sin TECH_AGENT_CLIENTE_SOPORTADO/SLACK_TECH_AGENT_USER_ID configurados,
-  // consultar_agente_tecnico simplemente no se ofrece (gating en daniel.ts) y el resto sigue igual.
-  slackAgentsChannel: process.env.SLACK_AGENTS_CHANNEL || "agentes-ia",
-  slackTechAgentUserId: process.env.SLACK_TECH_AGENT_USER_ID,
-  techAgentClienteSoportado: process.env.TECH_AGENT_CLIENTE_SOPORTADO, // ej. "Spectrum"
+  // Agente Técnico: env vars por cliente (TECH_AGENT_<EMPRESA>_CHANNEL/_BOT_USER_ID) leídas
+  // directo en config/tech-agents.ts (tabla TECH_AGENTS), no acá — ver
+  // plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E.3.
 };

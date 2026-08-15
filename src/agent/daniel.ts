@@ -8,7 +8,7 @@ import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
 import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
-import { env } from "../config/env.js";
+import { TECH_AGENTS, findTechAgentConfig } from "../config/tech-agents.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -103,17 +103,18 @@ export async function askDaniel(
   const effectiveDraft = mergeTicketFields(extracted, ticketDraft, { nombreCliente: profile?.nombreCliente, email: profile?.email });
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
-  // Gating por cliente (decisión #3 de plans/2026-08-12-agente-tecnico-n8n-spectrum.md):
-  // consultar_agente_tecnico solo se ofrece si el cliente coincide con el que tiene soporte
-  // técnico configurado, o si todavía no se conoce su perfil (para no bloquear el primer
-  // contacto) — chequeo determinístico en código, no solo el criterio del modelo.
-  const techAgentEnabled = Boolean(
-    env.techAgentClienteSoportado &&
-      (!profile?.empresa || profile.empresa.toLowerCase() === env.techAgentClienteSoportado.toLowerCase()),
-  );
+  // Gating por cliente (decisión #3 de plans/2026-08-12-agente-tecnico-n8n-spectrum.md, ruteo
+  // por tabla ver sección E.3): consultar_agente_tecnico solo se ofrece si el cliente tiene un
+  // Agente Técnico configurado (findTechAgentConfig busca por profile.empresa). Si todavía no se
+  // conoce el perfil (cliente nuevo, para no bloquear el primer contacto) y hay exactamente un
+  // cliente configurado, se usa ese por default — con más de un cliente en TECH_AGENTS, un
+  // perfil desconocido no puede resolver la ambigüedad y la tool no se ofrece hasta identificar
+  // la empresa (aceptable mientras solo haya un cliente soportado).
+  const techAgentConfig =
+    findTechAgentConfig(profile?.empresa) ?? (!profile?.empresa && TECH_AGENTS.length === 1 ? TECH_AGENTS[0] : undefined);
 
   let ticketCreated = false;
-  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, client, techAgentEnabled, () => {
+  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, client, techAgentConfig, () => {
     ticketCreated = true;
   });
   const model = buildModel(Object.values(toolsByName));

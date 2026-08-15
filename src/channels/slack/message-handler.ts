@@ -4,21 +4,8 @@ import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { bufferMessage } from "../../messaging/debounce-queue.js";
 import { toSlackMrkdwn } from "./format.js";
+import { wasAlreadyProcessed } from "./dedupe.js";
 import { logger } from "../../config/logger.js";
-
-const PROCESSED_EVENT_TTL_MS = 60_000;
-const processedEvents = new Map<string, number>();
-
-function alreadyProcessed(eventId: string): boolean {
-  const now = Date.now();
-  for (const [id, seenAt] of processedEvents) {
-    if (now - seenAt > PROCESSED_EVENT_TTL_MS) processedEvents.delete(id);
-  }
-
-  if (processedEvents.has(eventId)) return true;
-  processedEvents.set(eventId, now);
-  return false;
-}
 
 // Consulta a Daniel (o escala automáticamente si falla) y responde con `respond`, sin asumir
 // de dónde viene el mensaje ni cómo se contesta — la usa tanto el handler de mensaje entrante
@@ -89,7 +76,7 @@ export function registerMessageHandler(app: App, botUserId: string): void {
     // Slack Events API puede reenviar el mismo mensaje si no se acusa recibo a tiempo
     // (askDaniel + la tool de Monday pueden tardar más de los ~3s que Slack espera).
     const eventId = "client_msg_id" in message ? message.client_msg_id : undefined;
-    if (eventId && alreadyProcessed(eventId)) {
+    if (eventId && wasAlreadyProcessed(eventId)) {
       logger.warn({ eventId }, "Mensaje duplicado de Slack ignorado");
       return;
     }

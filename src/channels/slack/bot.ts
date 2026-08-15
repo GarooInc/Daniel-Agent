@@ -2,6 +2,7 @@ import bolt from "@slack/bolt";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { registerMessageHandler, handleResolvedMessage } from "./message-handler.js";
+import { registerTechAgentResponseHandler } from "./tech-agent-response-handler.js";
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getDb } from "../../integrations/mongo/client.js";
@@ -20,6 +21,7 @@ export async function startSlackBot(): Promise<void> {
 
   const auth = await app.client.auth.test();
   registerMessageHandler(app, auth.user_id as string);
+  registerTechAgentResponseHandler(app, auth.user_id as string);
 
   const worker = startDebounceWorker(async (_source, slackUserId, channelId, texto) => {
     await handleResolvedMessage(app.client, slackUserId, channelId, texto, (text) =>
@@ -27,7 +29,7 @@ export async function startSlackBot(): Promise<void> {
     );
   });
 
-  const webhookServer = startWebhookServer(app.client);
+  const webhookServer = startWebhookServer();
 
   const shutdown = async (signal: NodeJS.Signals) => {
     logger.info({ signal }, "Cerrando Daniel...");
