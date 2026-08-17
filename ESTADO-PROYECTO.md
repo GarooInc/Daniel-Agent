@@ -415,6 +415,13 @@ Reunión de Jorge con Fernando (RedTec). Resumen de lo relevante para Daniel, co
   - **Fernando**: crear la base PostgreSQL para la KB de Daniel + migrar el servicio de WebSocket al VPS.
   - **Jorge**: seguir desarrollando el Agente Técnico especializado — **no es trabajo nuevo**, es continuar los pendientes ya abiertos del punto 12 (A.5 timeout si el Técnico no responde, restringir `tools.include` del MCP de n8n a solo lectura, unificar `ticket_conversations`/`tech_agent_handoffs`, probar en vivo el flujo end-to-end Daniel↔Técnico↔Monday).
 
+**Alcance de la migración a PostgreSQL, cerrado con Jorge (2026-08-17)**:
+- **Migración completa, no solo la KB**: las 7 colecciones de MongoDB Atlas (`customers`, `chat_histories`, `ticket_drafts`, `ticket_conversations`, `tech_agent_handoffs`, `webhook_raw_events`, `platform_metrics`/`platform_events`, + la KB de FAQs vectorizada) pasan a PostgreSQL + `pg_vector` en el VPS de RedTec.
+- **División de trabajo**: Fernando provisiona la base Postgres y el VPS; **Jorge construye el pipeline de embeddings/búsqueda semántica y toda la capa de datos del lado de Daniel** (hoy en `integrations/mongo/`) sobre Postgres.
+- **Contenido de la KB**: se migran los datos reales de clientes/tickets/conversaciones tal cual (mismo criterio que la migración Mongo→Mongo de `customers.json` del 2026-08-12). Las FAQs, en cambio, se aprovechan para cargar contenido real en vez de migrar las 16 de ejemplo — coincide con un pendiente ya documentado (punto 2 de Pendientes: reemplazar el contenido de ejemplo antes de exponer Daniel a clientes externos).
+- **WebSocket de RedTec**: 100% responsabilidad de Fernando (infra + que esté funcionando). Del lado de Daniel solo falta que escuche cuando Fernando confirme que está en pie — el cliente (`redtec-realtime/client.ts`) ya está construido y es no bloqueante si las credenciales no están, así que no hay trabajo nuevo de este lado hasta esa confirmación (ver punto 1/7 de Pendientes).
+- **Sin diseñar todavía**: el plan detallado de la migración (qué se hace primero, cómo se corre sin downtime, cómo queda `integrations/mongo/` vs. una futura `integrations/postgres/`) — pendiente de armar como plan aparte en `plans/` antes de escribir código.
+
 ## Pendientes / próximos pasos (en orden)
 
 Todo lo bloqueante de sesiones anteriores (fantasma, aviso a `#escalacion`, memoria de Mongo, debounce, KB vectorizada) está **resuelto y confirmado en vivo** — ver el detalle de cada uno en las secciones de arriba (checklist de "Estado actual", "Hallazgo mayor", y los distintos "Retest en vivo").
