@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-15
+Última actualización: 2026-08-17
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -403,6 +403,17 @@ Type-check limpio, 37/37 tests verdes. Deployado (push `57f75a1`, auto-deploy v�
 Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver**: este guard solo cubre el caso exacto ya visto (nombre de producto). Si la extracción devuelve *otro* valor incorrecto pero plausible (no un nombre de producto), nada lo detecta y podría corromper el perfil igual — no hay validación general de "¿este nombre extraído tiene sentido?". Si vuelve a aparecer un caso así, considerar no persistir el perfil automáticamente sin algún tipo de confirmación, o comparar contra el nombre ya guardado antes de sobrescribir.
 
 **Reprobado en vivo (2026-08-05, mismo día): confirmado funcionando.** Deployado (push `4b95336`). Se repitió la misma pregunta ("...dar de alta un cliente en Sofi") con el mismo `slackUserId` contaminado — esta vez Daniel saludó correctamente como "Ana" (no "Sofi"), creó el ticket `#3141884822` sin problema, y el perfil en `users` se confirmó intacto (`nombreCliente: "Ana López"`) después, vía query directa a Mongo.
+
+## Reunión "Spectrum" con Fernando (2026-08-17)
+
+Reunión de Jorge con Fernando (RedTec). Resumen de lo relevante para Daniel, contrastado contra lo ya construido (ver `plans/2026-08-12-agente-tecnico-n8n-spectrum.md` sección E y el punto 12 de Pendientes para el diseño/estado real del Agente Técnico):
+
+- **Causa raíz nueva del WebSocket de tiempo real de RedTec, sin deployar todavía (punto 1/7 de Pendientes)**: además de faltar que RedTec confirme la URL real, Fernando reportó un **fallo de configuración de red en su Mac Mini** que rompe la conectividad del WebSocket. Decisión: **migrar el servicio de WebSocket a un VPS** para estabilidad — tarea de Fernando.
+- **Confirma lo ya documentado, sin cambios de diseño**: el flujo de escalamiento (Daniel → Agente Técnico especializado cuando no puede resolver solo), la comunicación 100% por Slack, y la supervisión humana obligatoria para cualquier cambio de código propuesto por el Técnico — los tres ya son el diseño vigente (Hermes Agent para Spectrum, canal `tecnico-spectrum`, requisito de aprobación humana antes de escritura real ya documentado en el punto 12).
+- **Decisión nueva: migrar la base de conocimiento de Daniel de MongoDB a PostgreSQL + `pg_vector`, alojada en el VPS de RedTec** — por estandarización de tecnología del proyecto. Esto es un cambio real de stack: hoy la KB de FAQs ya funciona end-to-end en Mongo Atlas (vector search clásico, embeddings `openai/text-embedding-3-small` vía OpenRouter, confirmado en vivo el 2026-08-06). Migrar implica rehacer el pipeline de embeddings/búsqueda sobre Postgres — **alcance todavía sin acotar**: no está confirmado si es solo la KB de FAQs o si el resto de las colecciones de Mongo (`chat_histories`, `ticket_drafts`, `customers`, `tech_agent_handoffs`, etc.) también migran eventualmente. Pendiente real antes de empezar: acotar el alcance con Fernando y decidir si se diseña como un plan aparte en `plans/`.
+- **Próximos pasos asignados**:
+  - **Fernando**: crear la base PostgreSQL para la KB de Daniel + migrar el servicio de WebSocket al VPS.
+  - **Jorge**: seguir desarrollando el Agente Técnico especializado — **no es trabajo nuevo**, es continuar los pendientes ya abiertos del punto 12 (A.5 timeout si el Técnico no responde, restringir `tools.include` del MCP de n8n a solo lectura, unificar `ticket_conversations`/`tech_agent_handoffs`, probar en vivo el flujo end-to-end Daniel↔Técnico↔Monday).
 
 ## Pendientes / próximos pasos (en orden)
 
