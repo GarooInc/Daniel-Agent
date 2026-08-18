@@ -28,6 +28,7 @@ Todas ya generadas y en uso — ver `.env.example` para la plantilla. Si necesit
 - `SLACK_ESCALATION_CHANNEL` (opcional, default `escalacion` — nombre del canal donde Daniel avisa cada ticket creado)
 - `MONDAY_API_TOKEN`
 - `MONGODB_URI` (nuevo 2026-07-30, requerido para la memoria de conversación — MongoDB Atlas, cluster `Cluster0` — ver sección de memoria abajo) y `MONGODB_DB_NAME` (default `daniel`; en producción se usa `DanielSoporte`, el nombre real de la BD creada en Atlas)
+- `POSTGRES_URL` (nuevo 2026-08-18, opcional mientras dura la migración a Postgres+pgvector — ver Pendiente #17. Connection string interno del recurso `daniel` en Coolify, mismo VPS, sin puerto público expuesto)
 - `WEBHOOK_PORT` (opcional, default `3300`) y `WEBHOOK_SECRET` (opcional — si no se setea, el webhook de abajo queda sin autenticar; nuevo 2026-08-11, ver sección del webhook)
 
 **Estado de esta máquina específica** (checkout de Windows usado en la sesión del 2026-07-30): tiene `OPENROUTER_API_KEY` y `MONDAY_API_TOKEN` reales cargados en `.env` para poder probar `askDaniel` suelto por consola (`npm run dev:agent`). **`MONGODB_URI` (`mongodb+srv://...`) no resuelve directo desde esta máquina**: la consulta DNS del registro SRV (`_mongodb._tcp....`) da `ETIMEOUT` incluso probando con resolvers alternativos (`8.8.8.8`/`1.1.1.1`) — la red de esta máquina bloquea las consultas DNS SRV por UDP normal, no es un problema del resolver configurado. **Workaround que sí funciona**: resolver el SRV y el TXT (opciones de conexión) manualmente vía DNS-over-HTTPS (`https://cloudflare-dns.com/dns-query?name=...&type=SRV`, funciona porque va sobre HTTPS/443 en vez de UDP/53) y armar a mano un connection string estándar no-SRV (`mongodb://user:pass@host1:27017,host2:27017,host3:27017/?ssl=true&replicaSet=...&authSource=admin`) con esos datos — probado y funciona (usado el 2026-07-30 noche para confirmar el estado real de `chat_histories`/`ticket_drafts`, ver Pendientes). El MCP de MongoDB Atlas conectado a esta sesión de Claude Code sufre el mismo bloqueo y no sirve como atajo.
@@ -100,13 +101,25 @@ src/
       ticket-conversations.ts       # ticket_conversations: correlación mondayItemId -> slackUserId/canal, ver Pendiente #13
       tech-agent-handoff.ts          # tech_agent_handoffs: handoff Daniel↔Agente Técnico por threadTs (Mongo), incluye mondayItemId, ver Pendiente #12
       webhook-events.ts             # webhook_raw_events: payloads crudos del webhook, ver abajo
+      # Toda esta carpeta se reemplaza por integrations/postgres/ en la migración en curso (Pendiente #17) — sigue siendo la que usa agent/channels/ hasta el corte (paso 7)
+    postgres/                 # nuevo (2026-08-18): capa Postgres+pgvector en paralelo a mongo/, ver Pendiente #17
+      client.ts                 # pool lazy, registra el tipo vector, corre schema.ts al conectar
+      schema.ts                   # DDL idempotente de las 9 tablas (como constante TS, no .sql suelto)
+      documents.ts                 # FAQs vectorizadas, query con el operador <=> de pgvector
+      customer-profile.ts            # equivalente a mongo/customer-profile.ts
+      ticket-draft.ts                  # equivalente a mongo/ticket-draft.ts
+      conversation-memory.ts             # chat_messages: normalizado por fila, no array embebido
+      ticket-conversations.ts              # equivalente a mongo/ticket-conversations.ts
+      tech-agent-handoff.ts                  # equivalente a mongo/tech-agent-handoff.ts
+      webhook-events.ts                        # equivalente a mongo/webhook-events.ts
+      retention.ts                               # reemplaza los TTL indexes de Mongo (Postgres no los tiene nativos)
     slack/
       notify-escalation.ts     # avisa cada ticket creado en el canal #escalacion
       resolve-channel.ts        # resuelve nombre de canal -> ID, con caché (usado por notifyTechAgent en consult-tech-agent.ts)
     redtec-realtime/          # WebSocket de tiempo real de RedTec Realstate (socket.io), ver abajo
       client.ts                 # conexión singleton, no bloqueante si faltan credenciales
-      platform-metrics.ts        # persiste container.stats en Mongo (platform_metrics, TTL 7 días) + consultas por ventana
-      crm-events-cache.ts          # persiste lead.*/appointment.* en platform_events, sin lectura expuesta todavía
+      platform-metrics.ts        # persiste container.stats en Postgres (platform_metrics, TTL 7 días vía integrations/postgres/retention.ts) + consultas por ventana — ya migrado, ver Pendiente #17
+      crm-events-cache.ts          # persiste lead.*/appointment.* en platform_events (Postgres), sin lectura expuesta todavía — ya migrado, ver Pendiente #17
       container-logs.ts             # utilidad interna para get_container_logs — NO conectada a ninguna tool
 
   data/
@@ -404,6 +417,8 @@ Type-check limpio, 47/47 tests verdes (5 nuevos). **Riesgo residual sin resolver
 
 **Reprobado en vivo (2026-08-05, mismo día): confirmado funcionando.** Deployado (push `4b95336`). Se repitió la misma pregunta ("...dar de alta un cliente en Sofi") con el mismo `slackUserId` contaminado — esta vez Daniel saludó correctamente como "Ana" (no "Sofi"), creó el ticket `#3141884822` sin problema, y el perfil en `users` se confirmó intacto (`nombreCliente: "Ana López"`) después, vía query directa a Mongo.
 
+- [x] **Capa de datos sobre PostgreSQL + pgvector — pasos 1 a 5 del plan de migración, en paralelo a Mongo (2026-08-18)**: nueva carpeta `src/integrations/postgres/` (`client.ts`, `schema.ts`, `documents.ts`, `customer-profile.ts`, `ticket-draft.ts`, `conversation-memory.ts`, `ticket-conversations.ts`, `tech-agent-handoff.ts`, `webhook-events.ts`, `retention.ts`) con la misma firma exportada que cada archivo equivalente de `integrations/mongo/`, para que el corte final (paso 7, ver Pendiente #17) sea un cambio mecánico de imports. `redtec-realtime/platform-metrics.ts`/`crm-events-cache.ts` ya editados en su lugar para usar Postgres (seguro, todavía sin tráfico real). `bot.ts` calienta la conexión y arranca `retention.ts` (reemplaza los TTL indexes de Mongo, que Postgres no tiene nativos). Nada de esto está conectado todavía al camino real de respuesta al cliente — `agent/`/`channels/` siguen importando de `integrations/mongo/`. Type-check limpio, 64/64 tests, y cada tabla probada a mano contra el Postgres real del VPS (incluido un bug real de `ON CONFLICT` contra un índice único parcial, encontrado y arreglado en el momento). Detalle completo y qué falta (backfill + corte) en el punto 17 de Pendientes y en `plans/2026-08-18-migracion-postgresql-pgvector.md`.
+
 ## Reunión "Spectrum" con Fernando (2026-08-17)
 
 Reunión de Jorge con Fernando (RedTec). Resumen de lo relevante para Daniel, contrastado contra lo ya construido (ver `plans/2026-08-12-agente-tecnico-n8n-spectrum.md` sección E y el punto 12 de Pendientes para el diseño/estado real del Agente Técnico):
@@ -544,7 +559,7 @@ También decidido el mismo día: convención estándar para datos que llegan de 
 
 ## Referencia rápida del stack
 
-Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Webhook HTTP genérico (`node:http` nativo) para datos internos · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia en MongoDB Atlas (chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + eventos crudos del webhook + métricas/eventos del WebSocket de RedTec) · WebSocket de tiempo real de RedTec Realstate vía `socket.io-client` (mergeado en `main`, sin deployar todavía, ver Pendientes) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (59 tests, 17 archivos — el número exacto queda desactualizado seguido, correr `npm test` para el real) · Test E2E automatizado (`npm run test:e2e`).
+Node.js + TypeScript · Slack vía `@slack/bolt` (Socket Mode) · Webhook HTTP genérico (`node:http` nativo) para datos internos · Debounce/cola de mensajes con Redis + BullMQ · Orquestación con LangChain.js · LLM vía OpenRouter (`deepseek/deepseek-v4-pro`, fijo en código) · Persistencia **en transición de MongoDB Atlas a PostgreSQL + `pgvector`** (ver Pendiente #17 para el detalle completo — hoy `agent/`/`channels/` siguen sobre Mongo Atlas: chat/tickets/perfiles + KB de FAQs vectorizada, `openai/text-embedding-3-small` vía OpenRouter, + eventos crudos del webhook + métricas/eventos del WebSocket de RedTec; la capa Postgres ya existe en paralelo en `integrations/postgres/`, pasos 1-5 del plan hechos y verificados, falta el backfill y el corte de imports) · WebSocket de tiempo real de RedTec Realstate vía `socket.io-client` (mergeado en `main`, sin deployar todavía, ver Pendientes) · Escalación vía API GraphQL de Monday.com (board `5101177200`) · Logging con `pino` · Tests con Vitest (64 tests, 17 archivos — el número exacto queda desactualizado seguido, correr `npm test` para el real) · Test E2E automatizado (`npm run test:e2e`).
 
 **Nota**: Express estaba en el plan original del stack pero **todavía no se instaló ni se usa** — el primer servidor HTTP real del proyecto (el webhook de arriba, 2026-08-11) se hizo con `node:http` nativo a propósito, porque solo necesitaba una ruta simple; Express sigue pendiente para cuando llegue el widget web (canal #2 del roadmap), que va a necesitar más rutas/middleware.
 
