@@ -35,6 +35,11 @@ export const env = {
   // otro cambio de código/redeploy. Ver integrations/redtec-realtime/client.ts.
   redtecRealtimeUrl: process.env.REDTEC_PLATFORM_WS_URL,
   redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET || process.env.SUPPORT_AGENT_WEBHOOK_SECRET,
+  // Migración MongoDB -> PostgreSQL+pgvector (ver plans/2026-08-18-migracion-postgresql-pgvector.md).
+  // Opcional a propósito mientras se construye la capa integrations/postgres/ en paralelo a la
+  // de Mongo — recién pasa a REQUIRED_ENV_VARS en el paso de corte del plan. Ya cargada en
+  // Coolify: infra (Postgres 18 + pgvector) confirmada funcionando el 2026-08-18.
+  postgresUrl: process.env.POSTGRES_URL,
   // Agente Técnico: env vars por cliente (TECH_AGENT_<EMPRESA>_CHANNEL/_BOT_USER_ID) leídas
   // directo en config/tech-agents.ts (tabla TECH_AGENTS), no acá — ver
   // plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E.3.
