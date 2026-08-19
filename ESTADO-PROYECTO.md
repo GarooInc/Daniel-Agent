@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-18
+Última actualización: 2026-08-19
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -270,6 +270,8 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
     - **Reasoning effort** (`toggleReasoningDropdown`): None / Minimal / Low / Medium / High / Extra High — palanca real para el pedido de Jorge de "resolver con el menor consumo de tokens posible": un nivel bajo (Low/Minimal) recorta tokens de razonamiento a costa de profundidad de análisis.
     - **"Session toolsets"** (`toggleToolsetsDropdown`, chip con label `Global`): por el contenido crudo encontrado en el DOM (botones "Apply"/"Clear (global)"), parece ser el control de qué conjunto de tools/MCP están habilitados para la sesión actual (con un nivel "Global" vs. override puntual) — **es la pista más prometedora para restringir el Técnico a solo-lectura desde la UI en vez de (o además de) `config.yaml`**, pero no se llegó a abrir su contenido real en esta pasada (el elemento no está en el DOM hasta que la conversación/composer termina de inicializarse del todo; quedó pendiente de reintentar con más tiempo de espera antes del click).
   - **Pendiente para la próxima pasada de esta exploración** (ver también Pendiente #12 actualizado): (a) cambiar el modelo del perfil `default` de `deepseek-v4-flash` a `deepseek-v4-pro` (ubicar el modo de edición del perfil, no solo el chip de modelo por conversación — para que aplique siempre, no solo a una conversación puntual); (b) abrir y documentar el contenido real de "Session toolsets"; (c) revisar Spaces/Kanban/Tasks/Todos/Insights/Logs en detalle (se navegaron una vez pero no se revisaron las capturas a fondo).
+
+- [x] **Chequeo de salud, sin cambios de código (2026-08-19)**: `git pull` sin novedades sobre `main` (`f113bd9`), `npx tsc --noEmit` limpio, `npm test` → 17 archivos / 64 tests, todos verdes. Confirma que el estado documentado el 2026-08-18 (pasos 1-5 de la migración a Postgres, ver Pendiente #17) sigue siendo el real — no se tocó nada de código en el medio. Sigue pendiente todo lo listado abajo (nada de esto lo prueba: no verifica el bot corriendo en vivo en Slack, ni Mongo/Postgres de producción, ni el flujo del Agente Técnico).
 
 ## Plan pendiente: debounce/cola de mensajes con Redis + KB vectorizada en Mongo Atlas (iniciado 2026-08-03)
 
