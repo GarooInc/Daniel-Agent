@@ -18,13 +18,13 @@ export type FlushHandler = (
   texto: string,
 ) => Promise<void>;
 
-function bufferKey(source: string, userId: string): string {
-  return `buffer:${source}:${userId}`;
+function bufferKey(source: string, userId: string, conversationId: string): string {
+  return `buffer:${source}:${userId}:${conversationId}`;
 }
 
-function jobId(source: string, userId: string): string {
+function jobId(source: string, userId: string, conversationId: string): string {
   // BullMQ prohíbe ":" en IDs de job personalizados (choca con su propio namespacing interno).
-  return `${source}_${userId}`;
+  return `${source}_${userId}_${conversationId}`;
 }
 
 let queue: Queue<DebounceJobData> | undefined;
@@ -38,8 +38,11 @@ function getQueue(): Queue<DebounceJobData> {
 
 // Junta mensajes seguidos de un mismo usuario (multi-línea estilo WhatsApp) en una sola
 // llamada a askDaniel. Cada mensaje nuevo reinicia la ventana de espera del mismo job
-// (mismo jobId = "{source}:{userId}"), así que solo se dispara el flush una vez que el
-// usuario deja de escribir por DEBOUNCE_MS.
+// (mismo jobId = "{source}_{userId}_{conversationId}"), así que solo se dispara el flush una vez
+// que el usuario deja de escribir por DEBOUNCE_MS. El jobId incluye el canal/conversación (no
+// solo el usuario) porque si el mismo usuario escribe en dos canales dentro de la ventana de
+// debounce, antes se pisaban el mismo buffer/job y la respuesta podía terminar en el canal
+// equivocado (bug conocido, ver ESTADO-PROYECTO.md punto 16).
 export async function bufferMessage(
   source: string,
   userId: string,
@@ -47,10 +50,10 @@ export async function bufferMessage(
   texto: string,
 ): Promise<void> {
   const redis = getRedis();
-  await redis.rpush(bufferKey(source, userId), texto);
+  await redis.rpush(bufferKey(source, userId, conversationId), texto);
 
   const q = getQueue();
-  const id = jobId(source, userId);
+  const id = jobId(source, userId, conversationId);
   const existing = await q.getJob(id);
   const existingState = existing ? await existing.getState() : undefined;
   if (existing && existingState === "delayed") {
@@ -75,7 +78,7 @@ export function startDebounceWorker(onFlush: FlushHandler): Worker<DebounceJobDa
     QUEUE_NAME,
     async (job) => {
       const { source, userId, conversationId } = job.data;
-      const key = bufferKey(source, userId);
+      const key = bufferKey(source, userId, conversationId);
       const redis = getRedis();
       const mensajes = await redis.lrange(key, 0, -1);
       await redis.del(key);
