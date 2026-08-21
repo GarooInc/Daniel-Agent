@@ -3,7 +3,7 @@ import { searchFaqsTool } from "./search-faqs.js";
 import { lookupCustomerTool } from "./lookup-customer.js";
 import { platformHealthTool } from "./platform-health.js";
 import { createEscalateToMondayTool } from "./escalate-to-monday.js";
-import type { TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
+import type { TicketDraftFields } from "../../integrations/postgres/ticket-draft.js";
 import type { TechAgentConfig } from "../../config/tech-agents.js";
 
 // escalar_a_monday se arma por sesión porque necesita el slackUserId de quien escribe — las

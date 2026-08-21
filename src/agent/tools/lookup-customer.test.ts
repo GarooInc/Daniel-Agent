@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const getCustomerByEmail = vi.fn();
-vi.mock("../../integrations/mongo/customer-profile.js", () => ({ getCustomerByEmail }));
+vi.mock("../../integrations/postgres/customer-profile.js", () => ({ getCustomerByEmail }));
 
 const { lookupCustomerTool } = await import("./lookup-customer.js");
 

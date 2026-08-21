@@ -1,9 +1,9 @@
 import { createSupportTicket } from "../integrations/monday/index.js";
 import { notifyEscalation } from "../integrations/slack/notify-escalation.js";
-import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
-import { clearHistory } from "../integrations/mongo/conversation-memory.js";
-import { clearTicketDraft, getTicketDraft } from "../integrations/mongo/ticket-draft.js";
-import { saveTicketConversation } from "../integrations/mongo/ticket-conversations.js";
+import { getCustomerProfile } from "../integrations/postgres/customer-profile.js";
+import { clearHistory } from "../integrations/postgres/conversation-memory.js";
+import { clearTicketDraft, getTicketDraft } from "../integrations/postgres/ticket-draft.js";
+import { saveTicketConversation } from "../integrations/postgres/ticket-conversations.js";
 import { mergeTicketFields } from "./tools/ticket-fields.js";
 import { logger } from "../config/logger.js";
 

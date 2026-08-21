@@ -1,4 +1,4 @@
-import type { TicketDraftFields } from "../../integrations/mongo/ticket-draft.js";
+import type { TicketDraftFields } from "../../integrations/postgres/ticket-draft.js";
 
 export const REQUIRED_FIELDS = ["nombreCliente", "email", "resumen", "urgencia", "tipoSolicitud", "producto"] as const;
 

@@ -3,9 +3,9 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 import { buildModel } from "./model.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { buildToolsByName } from "./tools/index.js";
-import { appendMessage, clearHistory, getLastMessageAt, getRecentMessages } from "../integrations/mongo/conversation-memory.js";
-import { getCustomerProfile } from "../integrations/mongo/customer-profile.js";
-import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
+import { appendMessage, clearHistory, getLastMessageAt, getRecentMessages } from "../integrations/postgres/conversation-memory.js";
+import { getCustomerProfile } from "../integrations/postgres/customer-profile.js";
+import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/postgres/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
 import { TECH_AGENTS, findTechAgentConfig } from "../config/tech-agents.js";

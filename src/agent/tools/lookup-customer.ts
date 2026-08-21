@@ -1,6 +1,6 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { getCustomerByEmail } from "../../integrations/mongo/customer-profile.js";
+import { getCustomerByEmail } from "../../integrations/postgres/customer-profile.js";
 
 export const lookupCustomerTool = tool(
   async ({ email }) => {

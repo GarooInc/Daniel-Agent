@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const findPendingHandoffByThreadTs = vi.fn();
 const deliverTechDiagnosis = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("../../integrations/mongo/tech-agent-handoff.js", () => ({ findPendingHandoffByThreadTs }));
+vi.mock("../../integrations/postgres/tech-agent-handoff.js", () => ({ findPendingHandoffByThreadTs }));
 vi.mock("../../agent/deliver-tech-diagnosis.js", () => ({ deliverTechDiagnosis }));
 
 const { registerTechAgentResponseHandler } = await import("./tech-agent-response-handler.js");

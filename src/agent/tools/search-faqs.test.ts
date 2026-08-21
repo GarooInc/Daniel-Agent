@@ -4,7 +4,7 @@ const embedText = vi.fn();
 const searchFaqsBySimilarity = vi.fn();
 
 vi.mock("../../integrations/embeddings/openrouter-embeddings.js", () => ({ embedText }));
-vi.mock("../../integrations/mongo/documents.js", () => ({ searchFaqsBySimilarity }));
+vi.mock("../../integrations/postgres/documents.js", () => ({ searchFaqsBySimilarity }));
 
 const { searchFaqsTool } = await import("./search-faqs.js");
 

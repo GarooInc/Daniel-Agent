@@ -7,8 +7,8 @@ const addTicketUpdate = vi.fn().mockResolvedValue(undefined);
 const markTicketReady = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("./extract-tech-diagnosis.js", () => ({ extractTechDiagnosis }));
-vi.mock("../integrations/mongo/tech-agent-handoff.js", () => ({ markHandoffAnswered }));
-vi.mock("../integrations/mongo/conversation-memory.js", () => ({ appendMessage }));
+vi.mock("../integrations/postgres/tech-agent-handoff.js", () => ({ markHandoffAnswered }));
+vi.mock("../integrations/postgres/conversation-memory.js", () => ({ appendMessage }));
 vi.mock("../integrations/monday/index.js", () => ({ addTicketUpdate, markTicketReady }));
 
 const { deliverTechDiagnosis } = await import("./deliver-tech-diagnosis.js");

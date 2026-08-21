@@ -1,15 +1,17 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { embedText } from "../../integrations/embeddings/openrouter-embeddings.js";
-import { searchFaqsBySimilarity } from "../../integrations/mongo/documents.js";
+import { searchFaqsBySimilarity } from "../../integrations/postgres/documents.js";
 import { PRODUCTO_VALUES } from "../../integrations/monday/create-ticket.js";
 
-// Umbral de relevancia mínimo (vectorSearchScore de Atlas, cosine, 0 a 1) para no devolverle
-// al modelo una FAQ que "parece" relacionada por similitud pero en realidad no responde la
-// consulta — mejor decir "no encontré nada" que forzar un match débil. Calibrado en vivo
-// (2026-08-06): con el prefijo de producto (ver abajo), un match real da ~0.76-0.83 y una
-// consulta irrelevante no pasa de ~0.68 — 0.72 deja margen de sobra de los dos lados.
-const MIN_SCORE = 0.72;
+// Umbral de relevancia mínimo (1 - cosine_distance de pgvector, 0 a 1) para no devolverle al
+// modelo una FAQ que "parece" relacionada por similitud pero en realidad no responde la
+// consulta — mejor decir "no encontré nada" que forzar un match débil. Calibrado en vivo contra
+// Postgres (2026-08-21, migración desde Mongo/Atlas — ver
+// plans/2026-08-18-migracion-postgresql-pgvector.md): con el prefijo de producto (ver abajo),
+// un match real dio 0.6288-0.8469 y un control irrelevante no pasó de 0.4845 — el score de
+// Atlas (antes 0.72) no es la misma escala que el de pgvector, no reusar ese número.
+const MIN_SCORE = 0.55;
 
 export const searchFaqsTool = tool(
   async ({ query, producto }) => {

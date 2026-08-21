@@ -4,8 +4,8 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { MODEL } from "./model.js";
 import { URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "../integrations/monday/create-ticket.js";
-import type { TicketDraftFields } from "../integrations/mongo/ticket-draft.js";
-import type { StoredMessage } from "../integrations/mongo/conversation-memory.js";
+import type { TicketDraftFields } from "../integrations/postgres/ticket-draft.js";
+import type { StoredMessage } from "../integrations/postgres/conversation-memory.js";
 
 const ExtractionSchema = z.object({
   nombreCliente: z

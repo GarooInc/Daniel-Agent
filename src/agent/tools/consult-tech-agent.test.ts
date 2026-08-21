@@ -4,7 +4,7 @@ import type { TechAgentConfig } from "../../config/tech-agents.js";
 const createHandoff = vi.fn().mockResolvedValue(undefined);
 const resolveChannelId = vi.fn();
 
-vi.mock("../../integrations/mongo/tech-agent-handoff.js", () => ({ createHandoff }));
+vi.mock("../../integrations/postgres/tech-agent-handoff.js", () => ({ createHandoff }));
 vi.mock("../../integrations/slack/resolve-channel.js", () => ({ resolveChannelId }));
 
 const { notifyTechAgent } = await import("./consult-tech-agent.js");

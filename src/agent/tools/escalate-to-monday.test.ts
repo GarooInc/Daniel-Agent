@@ -14,10 +14,10 @@ const notifyTechAgent = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../../integrations/monday/index.js", () => ({ createSupportTicket }));
 vi.mock("../../integrations/slack/notify-escalation.js", () => ({ notifyEscalation }));
-vi.mock("../../integrations/mongo/customer-profile.js", () => ({ saveCustomerProfile }));
-vi.mock("../../integrations/mongo/conversation-memory.js", () => ({ clearHistory }));
-vi.mock("../../integrations/mongo/ticket-draft.js", () => ({ clearTicketDraft, saveTicketDraftFields }));
-vi.mock("../../integrations/mongo/ticket-conversations.js", () => ({ saveTicketConversation }));
+vi.mock("../../integrations/postgres/customer-profile.js", () => ({ saveCustomerProfile }));
+vi.mock("../../integrations/postgres/conversation-memory.js", () => ({ clearHistory }));
+vi.mock("../../integrations/postgres/ticket-draft.js", () => ({ clearTicketDraft, saveTicketDraftFields }));
+vi.mock("../../integrations/postgres/ticket-conversations.js", () => ({ saveTicketConversation }));
 vi.mock("./consult-tech-agent.js", () => ({ notifyTechAgent }));
 
 const { createEscalateToMondayTool } = await import("./escalate-to-monday.js");

@@ -1,7 +1,7 @@
 import type { WebClient } from "@slack/web-api";
 import type { TechAgentConfig } from "../../config/tech-agents.js";
 import { resolveChannelId } from "../../integrations/slack/resolve-channel.js";
-import { createHandoff } from "../../integrations/mongo/tech-agent-handoff.js";
+import { createHandoff } from "../../integrations/postgres/tech-agent-handoff.js";
 import { logger } from "../../config/logger.js";
 
 // Función plana, no una tool de LangChain: la decisión de consultar al Agente Técnico dejó de

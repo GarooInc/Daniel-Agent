@@ -1,5 +1,5 @@
 import type { App } from "@slack/bolt";
-import { findPendingHandoffByThreadTs } from "../../integrations/mongo/tech-agent-handoff.js";
+import { findPendingHandoffByThreadTs } from "../../integrations/postgres/tech-agent-handoff.js";
 import { deliverTechDiagnosis } from "../../agent/deliver-tech-diagnosis.js";
 import { wasAlreadyProcessed } from "./dedupe.js";
 import { logger } from "../../config/logger.js";

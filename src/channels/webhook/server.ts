@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
-import { saveWebhookEvent } from "../../integrations/mongo/webhook-events.js";
+import { saveWebhookEvent } from "../../integrations/postgres/webhook-events.js";
 
 // Ruta genérica para datos internos (otros agentes de RedTec, sistemas de la empresa) mientras
 // no se conoce la estructura real de lo que va a llegar. Una vez que sepamos el origen y el

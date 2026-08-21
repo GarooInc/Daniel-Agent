@@ -5,7 +5,6 @@ import { registerMessageHandler, handleResolvedMessage } from "./message-handler
 import { registerTechAgentResponseHandler } from "./tech-agent-response-handler.js";
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
-import { getDb } from "../../integrations/mongo/client.js";
 import { getPool } from "../../integrations/postgres/client.js";
 import { startRetentionCleanup } from "../../integrations/postgres/retention.js";
 import { startWebhookServer } from "../webhook/index.js";
@@ -46,30 +45,20 @@ export async function startSlackBot(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  // Calentamiento de Mongo ANTES de aceptar mensajes de Slack — bug real en vivo (2026-08-06):
-  // sin esto, la primera conexión a Mongo (lazy, recién se dispara con el primer mensaje real)
-  // corría la carrera contra el timeout de selección del replica set en un contenedor recién
-  // arrancado, y el primer cliente después de cada redeploy se comía el fallo. Si igual falla acá
-  // (ver también el serverSelectionTimeoutMS más largo en client.ts), no se aborta el arranque —
-  // sigue funcionando el reintento en el próximo getDb() (client.ts ya lo soporta).
+  // Calentamiento de Postgres ANTES de aceptar mensajes de Slack — mismo motivo que tenía el
+  // calentamiento de Mongo antes del corte a Postgres (bug real en vivo, 2026-08-06): sin esto,
+  // la primera conexión (lazy, recién se dispara con el primer mensaje real) corre la carrera
+  // contra el timeout de conexión en un contenedor recién arrancado, y el primer cliente después
+  // de cada redeploy se come el fallo. Si igual falla acá, no se aborta el arranque — sigue
+  // funcionando el reintento en el próximo getPool() (client.ts ya lo soporta). `integrations/mongo/`
+  // ya no se usa en el camino real (ver plans/2026-08-18-migracion-postgresql-pgvector.md, paso 7) —
+  // queda en el repo sin borrar, como red de rollback.
   try {
-    await getDb();
-    logger.info("Mongo conectado (calentamiento ok)");
+    await getPool();
+    startRetentionCleanup();
+    logger.info("Postgres conectado (calentamiento ok)");
   } catch (err) {
-    logger.error({ err }, "No se pudo calentar la conexión a Mongo al arrancar — se reintentará en el próximo mensaje");
-  }
-
-  // Calentamiento de Postgres, mismo motivo que Mongo arriba — migración en curso (ver
-  // plans/2026-08-18-migracion-postgresql-pgvector.md), todavía convive con Mongo. Se salta
-  // directo si POSTGRES_URL no está configurada (paso a paso, no es obligatoria hasta el corte).
-  if (env.postgresUrl) {
-    try {
-      await getPool();
-      startRetentionCleanup();
-      logger.info("Postgres conectado (calentamiento ok)");
-    } catch (err) {
-      logger.error({ err }, "No se pudo calentar la conexión a Postgres al arrancar — se reintentará en el próximo uso");
-    }
+    logger.error({ err }, "No se pudo calentar la conexión a Postgres al arrancar — se reintentará en el próximo mensaje");
   }
 
   // No bloqueante a propósito: si RedTec todavía no confirmó URL/secreto, esto no hace nada
