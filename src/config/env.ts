@@ -40,7 +40,7 @@ export const env = {
   // de Mongo — recién pasa a REQUIRED_ENV_VARS en el paso de corte del plan. Ya cargada en
   // Coolify: infra (Postgres 18 + pgvector) confirmada funcionando el 2026-08-18.
   postgresUrl: process.env.POSTGRES_URL,
-  // Agente Técnico: env vars por cliente (TECH_AGENT_<EMPRESA>_CHANNEL/_BOT_USER_ID) leídas
-  // directo en config/tech-agents.ts (tabla TECH_AGENTS), no acá — ver
+  // Agente Técnico: ruteo cliente -> canal/bot en la tabla `tech_agents` de Postgres
+  // (integrations/postgres/tech-agents.ts), no en env vars — ver
   // plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E.3.
 };

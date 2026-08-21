@@ -15,6 +15,7 @@
     "migrate:faqs": "tsx src/migrate-faqs.ts",
     "migrate:customers": "tsx src/migrate-customers.ts",
     "migrate:mongo-to-postgres": "tsx src/migrate-mongo-to-postgres.ts",
+    "migrate:tech-agents": "tsx src/migrate-tech-agents.ts",
     "recalibrate:faq-score": "tsx src/recalibrate-faq-score.ts"
   },
   "devDependencies": {

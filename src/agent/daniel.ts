@@ -8,7 +8,7 @@ import { getCustomerProfile } from "../integrations/postgres/customer-profile.js
 import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDraftFields } from "../integrations/postgres/ticket-draft.js";
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
-import { TECH_AGENTS, findTechAgentConfig } from "../config/tech-agents.js";
+import { listTechAgents } from "../integrations/postgres/tech-agents.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -104,16 +104,19 @@ export async function askDaniel(
   await saveTicketDraftFields(slackUserId, effectiveDraft);
 
   // Gating por cliente (decisión #3 de plans/2026-08-12-agente-tecnico-n8n-spectrum.md, ruteo
-  // por tabla ver sección E.3): se resuelve el Agente Técnico del cliente (findTechAgentConfig
-  // busca por profile.empresa) para pasárselo a escalar_a_monday — ya no es una tool aparte que
-  // el modelo elija (ver escalate-to-monday.ts/consult-tech-agent.ts, hallazgo 2026-08-14/15).
-  // Si todavía no se conoce el perfil (cliente nuevo, para no bloquear el primer contacto) y hay
-  // exactamente un cliente configurado, se usa ese por default — con más de un cliente en
-  // TECH_AGENTS, un perfil desconocido no puede resolver la ambigüedad y el ticket no dispara el
+  // por tabla ver sección E.3, hoy en la tabla `tech_agents` de Postgres — ver
+  // integrations/postgres/tech-agents.ts): se resuelve el Agente Técnico del cliente (busca por
+  // profile.empresa) para pasárselo a escalar_a_monday — ya no es una tool aparte que el modelo
+  // elija (ver escalate-to-monday.ts/consult-tech-agent.ts, hallazgo 2026-08-14/15). Si todavía
+  // no se conoce el perfil (cliente nuevo, para no bloquear el primer contacto) y hay
+  // exactamente un cliente configurado, se usa ese por default — con más de un cliente
+  // configurado, un perfil desconocido no puede resolver la ambigüedad y el ticket no dispara el
   // aviso al Técnico hasta identificar la empresa (aceptable mientras solo haya un cliente
   // soportado).
+  const techAgents = await listTechAgents();
   const techAgentConfig =
-    findTechAgentConfig(profile?.empresa) ?? (!profile?.empresa && TECH_AGENTS.length === 1 ? TECH_AGENTS[0] : undefined);
+    techAgents.find((c) => profile?.empresa && c.empresa.toLowerCase() === profile.empresa.toLowerCase()) ??
+    (!profile?.empresa && techAgents.length === 1 ? techAgents[0] : undefined);
 
   let ticketCreated = false;
   const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, client, techAgentConfig, () => {

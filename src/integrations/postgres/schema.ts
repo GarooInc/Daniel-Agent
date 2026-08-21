@@ -123,4 +123,13 @@ CREATE TABLE IF NOT EXISTS platform_events (
   received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS platform_events_tenant_received_idx ON platform_events (tenant_id, received_at);
+
+-- Ruteo cliente -> canal privado + bot del Agente Técnico (Hermes Agent) de ese cliente.
+-- Reemplaza la tabla TECH_AGENTS hardcodeada en config/tech-agents.ts (2026-08-21) — el
+-- objetivo es que sumar un cliente nuevo sea un INSERT, no un deploy de código.
+CREATE TABLE IF NOT EXISTS tech_agents (
+  empresa TEXT PRIMARY KEY,
+  slack_channel TEXT NOT NULL,
+  slack_bot_user_id TEXT NOT NULL
+);
 `;
