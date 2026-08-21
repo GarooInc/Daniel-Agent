@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:e2e": "tsx src/test-e2e.ts",
     "migrate:faqs": "tsx src/migrate-faqs.ts",
-    "migrate:customers": "tsx src/migrate-customers.ts"
+    "migrate:customers": "tsx src/migrate-customers.ts",
+    "migrate:mongo-to-postgres": "tsx src/migrate-mongo-to-postgres.ts",
+    "recalibrate:faq-score": "tsx src/recalibrate-faq-score.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
