@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { saveWebhookEvent } from "../../integrations/postgres/webhook-events.js";
+import { handleTicketStatusChanged } from "./ticket-status-handler.js";
 
 // Ruta genérica para datos internos (otros agentes de RedTec, sistemas de la empresa) mientras
 // no se conoce la estructura real de lo que va a llegar. Una vez que sepamos el origen y el
@@ -58,7 +59,15 @@ export function startWebhookServer(): Server {
       logger.info({ route: ROUTE, headers: req.headers, body, parsed }, "Webhook recibido");
 
       saveWebhookEvent(ROUTE, req.headers, rawBody, body, parsed).catch((err) => {
-        logger.error({ err }, "No se pudo guardar el evento del webhook en Mongo");
+        logger.error({ err }, "No se pudo guardar el evento del webhook en Postgres");
+      });
+
+      // Best-effort, no bloquea la respuesta 200: si el payload es un ticket.status_changed
+      // conocido y hay una conversación correlacionada, avisa al cliente en Slack (ver
+      // ticket-status-handler.ts). Cualquier otro tipo de evento se ignora acá (queda igual
+      // logueado/persistido arriba).
+      handleTicketStatusChanged(body).catch((err) => {
+        logger.error({ err }, "Falló el aviso de cambio de estado de ticket");
       });
 
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
