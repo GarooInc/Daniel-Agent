@@ -3,14 +3,14 @@
  *
  * Qué prueba:
  *   - Flujo completo de conversación multi-turno (datos dados de a uno)
- *   - Memoria entre turnos (in-memory store en vez de MongoDB real)
+ *   - Memoria entre turnos (in-memory store en vez de Postgres real)
  *   - Extracción automática de campos con LLM real (OpenRouter)
  *   - Escalación a Monday.com con datos correctos
  *   - Limpieza del estado tras crear el ticket
  *   - Cleanup automático del ticket de prueba en Monday
  *
- * Qué NO prueba (requeriría MONGODB_URI de producción):
- *   - Conectividad real de MongoDB Atlas en producción
+ * Qué NO prueba (requeriría POSTGRES_URL de producción):
+ *   - Conectividad real de Postgres en producción
  *
  * Cómo correr: npx tsx src/test-e2e.ts
  */
@@ -28,8 +28,8 @@ import { getAllCustomers } from "./knowledge-base/index.js";
 import { createSupportTicket, URGENCIA_VALUES, TIPO_SOLICITUD_VALUES, PRODUCTO_VALUES } from "./integrations/monday/create-ticket.js";
 import { notifyEscalation } from "./integrations/slack/notify-escalation.js";
 import { mondayRequest } from "./integrations/monday/client.js";
-import type { TicketDraftFields } from "./integrations/mongo/ticket-draft.js";
-import type { StoredMessage } from "./integrations/mongo/conversation-memory.js";
+import type { TicketDraftFields } from "./integrations/postgres/ticket-draft.js";
+import type { StoredMessage } from "./integrations/postgres/conversation-memory.js";
 
 // ─── Colores para la consola ──────────────────────────────────────────────────
 const C = {

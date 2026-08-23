@@ -51,8 +51,8 @@ export async function startSlackBot(): Promise<void> {
   // contra el timeout de conexión en un contenedor recién arrancado, y el primer cliente después
   // de cada redeploy se come el fallo. Si igual falla acá, no se aborta el arranque — sigue
   // funcionando el reintento en el próximo getPool() (client.ts ya lo soporta). `integrations/mongo/`
-  // ya no se usa en el camino real (ver plans/2026-08-18-migracion-postgresql-pgvector.md, paso 7) —
-  // queda en el repo sin borrar, como red de rollback.
+  // (la red de rollback de la migración, ver plans/2026-08-18-migracion-postgresql-pgvector.md,
+  // paso 7) ya se borró del repo tras unos días sin sorpresas en vivo (2026-08-22).
   try {
     await getPool();
     startRetentionCleanup();

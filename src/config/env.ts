@@ -4,7 +4,7 @@ export const REQUIRED_ENV_VARS = [
   "SLACK_BOT_TOKEN",
   "SLACK_SIGNING_SECRET",
   "MONDAY_API_TOKEN",
-  "MONGODB_URI",
+  "POSTGRES_URL",
   "REDIS_URL",
 ] as const;
 
@@ -19,8 +19,6 @@ export const env = {
   slackSigningSecret: process.env.SLACK_SIGNING_SECRET,
   slackEscalationChannel: process.env.SLACK_ESCALATION_CHANNEL || "escalacion",
   mondayApiToken: process.env.MONDAY_API_TOKEN,
-  mongodbUri: process.env.MONGODB_URI,
-  mongodbDbName: process.env.MONGODB_DB_NAME || "daniel",
   redisUrl: process.env.REDIS_URL,
   webhookPort: Number.parseInt(process.env.WEBHOOK_PORT || "3300", 10),
   // Si no está seteado, el webhook queda abierto (sin validar remitente) — pensado para el
@@ -35,10 +33,8 @@ export const env = {
   // otro cambio de código/redeploy. Ver integrations/redtec-realtime/client.ts.
   redtecRealtimeUrl: process.env.REDTEC_PLATFORM_WS_URL,
   redtecRealtimeSecret: process.env.REDTEC_PLATFORM_WS_SECRET || process.env.SUPPORT_AGENT_WEBHOOK_SECRET,
-  // Migración MongoDB -> PostgreSQL+pgvector (ver plans/2026-08-18-migracion-postgresql-pgvector.md).
-  // Opcional a propósito mientras se construye la capa integrations/postgres/ en paralelo a la
-  // de Mongo — recién pasa a REQUIRED_ENV_VARS en el paso de corte del plan. Ya cargada en
-  // Coolify: infra (Postgres 18 + pgvector) confirmada funcionando el 2026-08-18.
+  // Persistencia real desde la migración MongoDB -> PostgreSQL+pgvector (2026-08-18/21, ver
+  // plans/2026-08-18-migracion-postgresql-pgvector.md) — requerida, ya no convive con Mongo.
   postgresUrl: process.env.POSTGRES_URL,
   // Agente Técnico: ruteo cliente -> canal/bot en la tabla `tech_agents` de Postgres
   // (integrations/postgres/tech-agents.ts), no en env vars — ver

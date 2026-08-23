@@ -23,16 +23,15 @@ npm test               # vitest run (todos los tests)
 npx vitest run src/agent/daniel.test.ts   # un solo archivo de test
 npx vitest run -t "nombre del test"       # un solo test por nombre
 
-npm run test:e2e       # flujo multi-turno con LLM y Monday reales (sin Mongo, in-memory store), crea y borra un ticket de prueba
+npm run test:e2e       # flujo multi-turno con LLM y Monday reales (sin Postgres, in-memory store), crea y borra un ticket de prueba
 
 npm run build          # tsc -> dist/
 npm start              # node dist/slack.js (producción)
 
-npm run migrate:faqs       # sembrar/reembeber FAQs en Mongo
-npm run migrate:customers  # migrar customers.json/users a la colección unificada `customers`
+npm run migrate:faqs       # sembrar/reembeber FAQs en Postgres (pgvector)
 ```
 
-CI (`.github/workflows/ci.yml`) corre `tsc --noEmit` + `npm test` en cada push/PR a `main`, sin secrets (los tests mockean Mongo/OpenRouter/Monday).
+CI (`.github/workflows/ci.yml`) corre `tsc --noEmit` + `npm test` en cada push/PR a `main`, sin secrets (los tests mockean Postgres/OpenRouter/Monday).
 
 ## Arquitectura
 
@@ -41,10 +40,10 @@ Capas pensadas para escalar (más tools, más canales, más integraciones) sin v
 ```
 src/
   config/        env.ts (única fuente de verdad de env vars), logger.ts (pino), tech-agents.ts (tabla de ruteo cliente->Agente Técnico)
-  knowledge-base/  capa de datos de FAQs/customers (hoy vectorizado en Mongo, ver abajo)
+  knowledge-base/  capa de datos de FAQs/customers (hoy vectorizado en Postgres/pgvector, ver abajo)
   agent/         el "cerebro": prompt.ts, model.ts (modelo fijo en código, no env var), daniel.ts (loop de tool-calling -> askDaniel()), tools/
   channels/      un canal por carpeta: slack/ (Bolt, Socket Mode) y webhook/ (HTTP genérico node:http)
-  integrations/  servicios externos que Daniel llama: monday/, mongo/, slack/ (notificaciones), redtec-realtime/ (WebSocket), embeddings/, redis/
+  integrations/  servicios externos que Daniel llama: monday/, postgres/, slack/ (notificaciones), redtec-realtime/ (WebSocket), embeddings/, redis/
   messaging/     debounce-queue.ts (BullMQ, agrupa mensajes rápidos del mismo usuario antes de invocar al agente)
   data/          faqs.json/customers.json — datos de ejemplo, no producción real (ver ESTADO-PROYECTO.md)
 ```
@@ -53,7 +52,7 @@ src/
 
 Punto de entrada único de todo el sistema, independiente del canal: `askDaniel(userMessage, slackUserId, channelId, client?)`.
 
-1. Carga en paralelo: historial de chat, perfil de cliente, borrador de ticket — todo por `slackUserId` en Mongo.
+1. Carga en paralelo: historial de chat, perfil de cliente, borrador de ticket — todo por `slackUserId` en Postgres.
 2. **Detección de sesión nueva** (gap de +1h sin mensajes de ese usuario): descarta historial y borrador viejos antes de seguir. Esto existe porque un borrador/historial abandonado se filtró a una conversación nueva y disparó un ticket con datos equivocados (bug real, ver ESTADO-PROYECTO.md 2026-07-30).
 3. **Extracción determinística de datos del ticket** (`extract-ticket-fields.ts`): una llamada LLM aparte extrae nombre/email/producto/etc. de toda la conversación en cada mensaje, independiente de que el modelo principal decida usar la tool de escalar. Este es el mecanismo central de confiabilidad del proyecto — los modelos probados (`gpt-5-mini`, `deepseek-v4-pro`) no recuperaban de forma confiable datos dados varios turnos atrás por su cuenta. **Si aparece un "Daniel no recuerda algo que ya le dijeron", la solución es sacar ese dato de la memoria del LLM y ponerlo en almacenamiento determinístico como este, no seguir puliendo el prompt.**
 4. Resuelve el Agente Técnico del cliente (`findTechAgentConfig` por `profile.empresa`) para pasárselo a la tool de escalar — **no es una tool que el modelo elija llamar**, es un efecto secundario determinístico de `escalar_a_monday` (se sacó del LLM tras un intento fallido en vivo).
