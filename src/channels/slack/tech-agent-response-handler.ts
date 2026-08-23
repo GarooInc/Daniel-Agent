@@ -20,7 +20,10 @@ export function registerTechAgentResponseHandler(app: App, danielBotUserId: stri
     if (!("thread_ts" in message) || !message.thread_ts) return;
     if (!message.text.includes(mentionTag)) return;
 
-    const eventId = "client_msg_id" in message ? message.client_msg_id : undefined;
+    // Namespaced con un prefijo propio: comparte el mapa de dedupe (dedupe.ts) con
+    // message-handler.ts sobre el mismo client_msg_id — ver el comentario ahí para el detalle
+    // del bug que esto evita.
+    const eventId = "client_msg_id" in message ? `tech:${message.client_msg_id}` : undefined;
     if (eventId && wasAlreadyProcessed(eventId)) return;
 
     try {

@@ -5,6 +5,7 @@ import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { bufferMessage } from "../../messaging/debounce-queue.js";
 import { toSlackMrkdwn } from "./format.js";
 import { wasAlreadyProcessed } from "./dedupe.js";
+import { listTechAgents } from "../../integrations/postgres/tech-agents.js";
 import { logger } from "../../config/logger.js";
 
 // Consulta a Daniel (o escala automáticamente si falla) y responde con `respond`, sin asumir
@@ -73,9 +74,21 @@ export function registerMessageHandler(app: App, botUserId: string): void {
     const slackUserId = message.user;
     const channelId = message.channel;
 
+    // El Técnico menciona explícitamente a Daniel para entregar su diagnóstico final (ver
+    // tech-agent-response-handler.ts, registrado sobre el mismo evento `message`) — sin este
+    // chequeo, este handler también lo procesaba como si fuera un cliente pidiendo soporte
+    // (bug real, no solo teórico: ver ESTADO-PROYECTO.md pendiente #12). No filtra por canal
+    // porque un cliente nunca comparte canal con un Técnico — filtra por quién es el autor.
+    const techAgentBotUserIds = new Set((await listTechAgents()).map((a) => a.slackBotUserId));
+    if (techAgentBotUserIds.has(slackUserId)) return;
+
     // Slack Events API puede reenviar el mismo mensaje si no se acusa recibo a tiempo
-    // (askDaniel + la tool de Monday pueden tardar más de los ~3s que Slack espera).
-    const eventId = "client_msg_id" in message ? message.client_msg_id : undefined;
+    // (askDaniel + la tool de Monday pueden tardar más de los ~3s que Slack espera). Namespaced
+    // con un prefijo propio: el mismo `client_msg_id` también pasa por
+    // tech-agent-response-handler.ts, y comparten el mapa de dedupe (dedupe.ts) — sin el
+    // prefijo, el handler que corre primero (este) "gastaba" la marca de dedupe y el otro
+    // handler nunca llegaba a procesar el mensaje (bug real encontrado, no solo teórico).
+    const eventId = "client_msg_id" in message ? `customer:${message.client_msg_id}` : undefined;
     if (eventId && wasAlreadyProcessed(eventId)) {
       logger.warn({ eventId }, "Mensaje duplicado de Slack ignorado");
       return;
