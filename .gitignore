@@ -4,3 +4,6 @@ node_modules/
 dist/
 build/
 *.log
+
+# Artefactos de depuracion de Playwright MCP (snapshots/screenshots de sesiones de browser automation)
+.playwright-mcp/
