@@ -1,5 +1,5 @@
 > **Estado: implementado (2026-08-14).** Este documento es el plan de la sesión de código que
-> ejecutó la sección E de `plans/2026-08-12-agente-tecnico-n8n-spectrum.md` del lado de este
+> ejecutó la sección E de `plans/agente-tecnico/2026-08-12-diseno-inicial.md` del lado de este
 > repo. Type-check limpio, 60/60 tests verdes al terminar — ver `ESTADO-PROYECTO.md` (punto 12)
 > para el resumen final y qué queda pendiente en vivo (cargar el `slackBotUserId` real en
 > Coolify, probar el flujo completo end-to-end). Se conserva tal cual se escribió antes de
@@ -12,7 +12,7 @@
 El Agente Técnico (instancia de Hermes Agent) ya está desplegado y funcionando en Slack
 (`ESTADO-PROYECTO.md`, sesión 2026-08-14): app "Tecnico Spectrum", canal privado `tecnico-spectrum`,
 conectado a n8n vía MCP nativo. Del lado de este repo (Daniel), lo que existe hoy es el diseño
-**viejo** (A.1-A.4 de `plans/2026-08-12-agente-tecnico-n8n-spectrum.md`, commits `15f0310`/`70a8ee8`):
+**viejo** (A.1-A.4 de `plans/agente-tecnico/2026-08-12-diseno-inicial.md`, commits `15f0310`/`70a8ee8`):
 la tool `consultar_agente_tecnico` postea en un canal único (`SLACK_AGENTS_CHANNEL`/
 `SLACK_TECH_AGENT_USER_ID`, un solo cliente soportado vía `TECH_AGENT_CLIENTE_SOPORTADO`), y la
 respuesta se correlaciona vía un **webhook HTTP** (`POST /webhook/internal`,

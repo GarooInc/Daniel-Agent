@@ -4,7 +4,7 @@ Fecha: 2026-08-12. Decidido por Jorge, diseño y redacción con Claude Code.
 
 ## Por qué hizo falta esta decisión
 
-Al planear el "Agente Técnico" (`plans/2026-08-12-agente-tecnico-n8n-spectrum.md`) apareció una
+Al planear el "Agente Técnico" (`plans/agente-tecnico/2026-08-12-diseno-inicial.md`) apareció una
 dependencia sobre `profile?.empresa` para decidir si mostrarle esa tool a un cliente. Al revisar
 el código, **ese campo no existe en ningún lado accesible por `slackUserId`**. Hoy conviven tres
 nociones de "cliente" sin conectar:
