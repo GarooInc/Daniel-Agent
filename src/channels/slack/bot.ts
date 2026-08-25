@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { registerMessageHandler, handleResolvedMessage } from "./message-handler.js";
 import { registerTechAgentResponseHandler } from "./tech-agent-response-handler.js";
+import { startTechAgentTimeoutChecker } from "../../agent/tech-agent-timeout.js";
 import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounce-queue.js";
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getPool } from "../../integrations/postgres/client.js";
@@ -67,6 +68,8 @@ export async function startSlackBot(): Promise<void> {
 
   await app.start();
   logger.info("⚡️ Daniel está corriendo (Slack Socket Mode)");
+
+  startTechAgentTimeoutChecker(app.client);
 
   getRedis()
     .ping()

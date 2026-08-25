@@ -39,4 +39,7 @@ export const env = {
   // Agente Técnico: ruteo cliente -> canal/bot en la tabla `tech_agents` de Postgres
   // (integrations/postgres/tech-agents.ts), no en env vars — ver
   // plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E.3.
+  // A.5 — timeout si el Agente Técnico no responde. Opcional a propósito (no en
+  // REQUIRED_ENV_VARS): sin esto, agent/tech-agent-timeout.ts usa el default de 15 minutos.
+  techAgentTimeoutMs: process.env.TECH_AGENT_TIMEOUT_MS ? Number(process.env.TECH_AGENT_TIMEOUT_MS) : undefined,
 };

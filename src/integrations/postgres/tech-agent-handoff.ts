@@ -69,6 +69,18 @@ export async function findPendingHandoffByThreadTs(threadTs: string): Promise<Te
   return row ? rowToHandoff(row) : null;
 }
 
+// A.5 (ver plans/2026-08-12-agente-tecnico-n8n-spectrum.md): handoffs que siguen "pending" más
+// de olderThanMs — el Agente Técnico nunca respondió (o mencionó a Daniel sin que
+// extractTechDiagnosis corriera). Consumido por agent/tech-agent-timeout.ts.
+export async function findStalePendingHandoffs(olderThanMs: number): Promise<TechAgentHandoffDoc[]> {
+  const pool = await getPool();
+  const result = await pool.query<HandoffRow>(
+    `SELECT * FROM tech_agent_handoffs WHERE status = 'pending' AND created_at < now() - $1::interval`,
+    [`${olderThanMs} milliseconds`],
+  );
+  return result.rows.map(rowToHandoff);
+}
+
 export async function markHandoffAnswered(
   threadTs: string,
   respuestaCruda: string,
