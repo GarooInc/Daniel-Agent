@@ -37,9 +37,9 @@ export type FaqSearchResult = Faq & { score: number };
 
 // Cosine distance de pgvector (`<=>`) va de 0 (idéntico) a 2 (opuesto) — `1 - distancia` da un
 // score en la misma dirección que el vectorSearchScore de Atlas (más alto = más parecido), pero
-// NO es la misma escala numérica. MIN_SCORE en agent/tools/search-faqs.ts está calibrado para
-// Atlas — hay que recalibrarlo contra esta función antes de confiar en la búsqueda semántica
-// sobre Postgres (ver plan de migración).
+// NO es la misma escala numérica. MIN_SCORE en agent/tools/search-faqs.ts ya se recalibró para
+// esta escala (2026-08-21), aunque con datos sintéticos — falta calibrarlo con tráfico real, ver
+// el logging agregado en search-faqs.ts.
 export async function searchFaqsBySimilarity(
   queryEmbedding: number[],
   opts: { producto?: string; limit?: number } = {},
