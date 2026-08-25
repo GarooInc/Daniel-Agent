@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-23
+Última actualización: 2026-08-25
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -27,11 +27,8 @@ Todas ya generadas y en uso — ver `.env.example` para la plantilla. Si necesit
 - `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`
 - `SLACK_ESCALATION_CHANNEL` (opcional, default `escalacion` — nombre del canal donde Daniel avisa cada ticket creado)
 - `MONDAY_API_TOKEN`
-- `MONGODB_URI` (nuevo 2026-07-30, requerido para la memoria de conversación — MongoDB Atlas, cluster `Cluster0` — ver sección de memoria abajo) y `MONGODB_DB_NAME` (default `daniel`; en producción se usa `DanielSoporte`, el nombre real de la BD creada en Atlas)
-- `POSTGRES_URL` (nuevo 2026-08-18, opcional mientras dura la migración a Postgres+pgvector — ver Pendiente #17. Connection string interno del recurso `daniel` en Coolify, mismo VPS, sin puerto público expuesto)
+- `POSTGRES_URL` (**requerido** desde el 2026-08-22 — toda la persistencia corre sobre Postgres+pgvector, ver Pendiente #17 para el detalle completo de la migración. Connection string interno del recurso `daniel` en Coolify, mismo VPS, sin puerto público expuesto). `MONGODB_URI`/`MONGODB_DB_NAME` ya no existen — Mongo se borró del todo del repo (código y dependencia) el 2026-08-22, tras confirmar unos días estables en Postgres.
 - `WEBHOOK_PORT` (opcional, default `3300`) y `WEBHOOK_SECRET` (opcional — si no se setea, el webhook de abajo queda sin autenticar; nuevo 2026-08-11, ver sección del webhook)
-
-**Estado de esta máquina específica** (checkout de Windows usado en la sesión del 2026-07-30): tiene `OPENROUTER_API_KEY` y `MONDAY_API_TOKEN` reales cargados en `.env` para poder probar `askDaniel` suelto por consola (`npm run dev:agent`). **`MONGODB_URI` (`mongodb+srv://...`) no resuelve directo desde esta máquina**: la consulta DNS del registro SRV (`_mongodb._tcp....`) da `ETIMEOUT` incluso probando con resolvers alternativos (`8.8.8.8`/`1.1.1.1`) — la red de esta máquina bloquea las consultas DNS SRV por UDP normal, no es un problema del resolver configurado. **Workaround que sí funciona**: resolver el SRV y el TXT (opciones de conexión) manualmente vía DNS-over-HTTPS (`https://cloudflare-dns.com/dns-query?name=...&type=SRV`, funciona porque va sobre HTTPS/443 en vez de UDP/53) y armar a mano un connection string estándar no-SRV (`mongodb://user:pass@host1:27017,host2:27017,host3:27017/?ssl=true&replicaSet=...&authSource=admin`) con esos datos — probado y funciona (usado el 2026-07-30 noche para confirmar el estado real de `chat_histories`/`ticket_drafts`, ver Pendientes). El MCP de MongoDB Atlas conectado a esta sesión de Claude Code sufre el mismo bloqueo y no sirve como atajo.
 
 ## Estructura del proyecto
 
@@ -471,7 +468,19 @@ Todavía más tarde el mismo día, en una sesión aparte de "cómo construimos e
 
 Más tarde el mismo día (2026-08-14), se retomó el wiring del lado Daniel: `tech-agent-response-handler.ts` (nuevo) reemplaza el webhook de correlación de A.3/A.4, `consult-tech-agent.ts`/`tools/index.ts`/`daniel.ts` pasaron a usar `TechAgentConfig`/`findTechAgentConfig()` en vez de los env vars de un solo cliente, y se removió `handle-tech-agent-diagnosis.ts` + su despacho en `webhook/server.ts` (ver el bullet correspondiente en "Estado actual" y el detalle actualizado del punto 12 más abajo). Type-check limpio, 60/60 tests verdes. Queda real: cargar el `slackBotUserId` real de "Tecnico Spectrum" en Coolify y probar el flujo completo en vivo.
 
-**Sigue realmente abierto**: la integración realtime de RedTec (punto 1, bloqueada en que RedTec confirme solo la URL — el nombre del secreto ya no bloquea), el mapeo tenant↔cliente (punto 8), calibrar el umbral de FAQs con tráfico real (punto 6), confirmar que el fantasma no reaparece (punto 5), observabilidad de negocio y staging (punto 11), el Agente Técnico — **el wiring del lado Daniel está hecho (2026-08-14) y el bot user ID del Técnico ya cargado (2026-08-15); queda pendiente aplicar la configuración del lado Hermes (SOUL.md, tools.include solo lectura, modelo) que ya está redactada en `plans/agente-tecnico/2026-08-16-configuracion-hermes.md`, y probar el flujo completo en vivo** — la correlación real del webhook de tickets (punto 13, parte 1 ya hecha), un dominio propio para el webhook (punto 14), y la nota suelta de WhatsApp/campaña sin contexto suficiente para actuar (punto 15).
+**Sigue realmente abierto (histórico, 2026-08-14/15 — ver abajo la lista vigente 2026-08-25)**: la integración realtime de RedTec (punto 1, bloqueada en que RedTec confirme solo la URL — el nombre del secreto ya no bloquea), el mapeo tenant↔cliente (punto 8), calibrar el umbral de FAQs con tráfico real (punto 6), confirmar que el fantasma no reaparece (punto 5), observabilidad de negocio y staging (punto 11), el Agente Técnico — **el wiring del lado Daniel está hecho (2026-08-14) y el bot user ID del Técnico ya cargado (2026-08-15); queda pendiente aplicar la configuración del lado Hermes (SOUL.md, tools.include solo lectura, modelo) que ya está redactada en `plans/agente-tecnico/2026-08-16-configuracion-hermes.md`, y probar el flujo completo en vivo** — la correlación real del webhook de tickets (punto 13, parte 1 ya hecha), un dominio propio para el webhook (punto 14), y la nota suelta de WhatsApp/campaña sin contexto suficiente para actuar (punto 15).
+
+**Estado vigente de los pendientes reales (2026-08-25, reemplaza la lista de arriba — todo lo del Agente Técnico se movió a `plans/agente-tecnico/README.md`, sección "Pendientes reales, abiertos"):**
+- **Integración realtime de RedTec (punto 1)**: sigue bloqueada, solo falta que RedTec confirme la URL (`REDTEC_PLATFORM_WS_URL`). El nombre del secreto ya no bloquea (el código acepta ambos nombres posibles).
+- **Mapeo Slack cliente → `tenantId` (punto 8)**: sin retomar.
+- **Calibrar `MIN_SCORE` de `buscar_faqs` con tráfico real (punto 6)**: **[INSTRUMENTADO 2026-08-25]** — ya se agregó logging de scores reales (`agent/tools/search-faqs.ts`), antes era imposible calibrar porque no quedaba ningún rastro. Ahora depende de acumular unas semanas de uso real y revisar esos logs.
+- **Confirmar que el "fantasma" no reaparece (punto 5)**: sigue sin confirmación definitiva de causa raíz, baja prioridad — sin novedades desde la última sesión.
+- **Observabilidad de negocio / panel de gestión (punto 11)**: **[DECIDIDO 2026-08-25]** — lo construye el equipo de Garoo en una plataforma propia que ya existe, no en este repo. LangSmith queda como decisión aparte e independiente, sin implementar.
+- **Agente Técnico**: **[EN PRODUCCIÓN PILOTO desde 2026-08-23]**, ya no es un pendiente de implementación. Quedan pendientes reales puntuales — ver `plans/agente-tecnico/README.md` para el detalle: probar en vivo el protocolo de autorización humana para escritura (necesita restaurar al menos `test_workflow` en `tools.include`, hoy recortado a 6 tools de solo lectura), y probar en vivo el timeout de A.5 (código deployado, sin disparar todavía con un caso real).
+- **Correlación real del webhook de tickets (punto 13)**: cerrada — parte 1 y 2 hechas y verificadas en vivo (2026-08-21).
+- **Dominio propio para el webhook (punto 14)**: **[BLOQUEADO, confirmado 2026-08-25]** — no depende de Jorge, tiene que asignarlo la empresa.
+- **Nota de WhatsApp/campaña (punto 15)**: sigue sin contexto suficiente para actuar.
+- **Unificar `ticket_conversations`/`tech_agent_handoffs`**: **[CERRADO 2026-08-25]** — evaluado y decidido no fusionar (ver punto 12 y el detalle completo movido a `plans/agente-tecnico/README.md`).
 
 **Evaluación estratégica (2026-08-12)**: `plans/2026-08-12-roadmap-premium-profesional.md` tiene el diagnóstico completo de qué falta para pasar de "v1 que funciona en dogfooding interno" a "producto premium confiable con clientes externos reales" (datos reales de KB/clientes, CI, observabilidad de negocio, staging, segundo canal, etc.), con prioridades y esfuerzo estimado. Los ítems de esa evaluación que ya estaban en esta lista se marcan abajo con referencia cruzada; los que son nuevos se agregaron como puntos 9-11.
 
