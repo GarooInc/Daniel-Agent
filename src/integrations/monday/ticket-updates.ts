@@ -25,13 +25,14 @@ const CHANGE_STATUS_MUTATION = `
 `;
 
 // Solo se llama cuando el diagnóstico del Técnico es concreto y resuelve el caso
-// (diagnosis.resuelto === true) — en cualquier otro caso el ticket se queda en "En curso", su
-// default. No hay un estado intermedio tipo "en revisión técnica" en el board real.
+// (diagnosis.resuelto === true) — en cualquier otro caso el ticket se queda en "Working on it",
+// su default. El tablero de producción no tiene un estado "Listo" propio (solo Working on
+// it/Done/Stuck/Testing) — decisión 2026-08-26: mapea a "Done".
 export async function markTicketReady(itemId: string): Promise<void> {
   await mondayRequest(CHANGE_STATUS_MUTATION, {
     boardId: SUPPORT_BOARD_ID,
     itemId,
     columnId: SUPPORT_BOARD_COLUMNS.estado,
-    value: "Listo",
+    value: "Done",
   });
 }

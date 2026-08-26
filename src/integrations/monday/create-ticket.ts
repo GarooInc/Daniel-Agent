@@ -38,15 +38,43 @@ const CREATE_ITEM_MUTATION = `
   }
 `;
 
+// El tablero de producción no tiene columnas propias para email/producto/queSeIntentoYa
+// (a diferencia del tablero de pruebas) — decisión 2026-08-26: se incluyen como texto dentro
+// de Descripcion en vez de perderlos, aunque eso signifique que dejan de ser filtrables como
+// columna separada en Monday.
+function buildDescripcion(ticket: NuevoTicket): string {
+  return [
+    ticket.resumen,
+    `Email: ${ticket.email}`,
+    `Producto: ${ticket.producto}`,
+    `Qué se intentó: ${ticket.queSeIntentoYa}`,
+  ].join("\n\n");
+}
+
+// tipoSolicitud (Problema/Solicitud/Pregunta) no tiene columna homóloga — se mapea a la
+// Categoría del tablero nuevo (Bug/Pregunta/Solicitud). "Problema" del cliente se modela como
+// "Bug" porque en la práctica son incidencias sobre algo que no funciona como debería.
+const CATEGORIA_BY_TIPO_SOLICITUD: Record<TipoSolicitudTicket, string> = {
+  Problema: "Bug",
+  Solicitud: "Solicitud",
+  Pregunta: "Pregunta",
+};
+
+// urgencia (No es urgente/Urgente) no tiene columna homóloga — se mapea a Prioridad (P1-P4)
+// del tablero nuevo. Decisión 2026-08-26: deja P1 Crítico y P4 Bajo libres para que el equipo
+// humano los ajuste manualmente, porque Daniel no distingue esos extremos hoy.
+const PRIORIDAD_BY_URGENCIA: Record<UrgenciaTicket, string> = {
+  Urgente: "P2 Alto",
+  "No es urgente": "P3 Medio",
+};
+
 export async function createSupportTicket(ticket: NuevoTicket): Promise<string> {
   const columnValues = {
-    [SUPPORT_BOARD_COLUMNS.email]: ticket.email,
-    [SUPPORT_BOARD_COLUMNS.resumen]: ticket.resumen,
-    [SUPPORT_BOARD_COLUMNS.urgencia]: { label: ticket.urgencia },
-    [SUPPORT_BOARD_COLUMNS.tipoSolicitud]: { label: ticket.tipoSolicitud },
-    [SUPPORT_BOARD_COLUMNS.producto]: { label: ticket.producto },
-    [SUPPORT_BOARD_COLUMNS.canalOrigen]: { label: ticket.canalOrigen },
-    [SUPPORT_BOARD_COLUMNS.queSeIntentoYa]: ticket.queSeIntentoYa,
+    [SUPPORT_BOARD_COLUMNS.contacto]: ticket.nombreCliente,
+    [SUPPORT_BOARD_COLUMNS.descripcion]: buildDescripcion(ticket),
+    [SUPPORT_BOARD_COLUMNS.categoria]: { label: CATEGORIA_BY_TIPO_SOLICITUD[ticket.tipoSolicitud] },
+    [SUPPORT_BOARD_COLUMNS.canal]: ticket.canalOrigen,
+    [SUPPORT_BOARD_COLUMNS.prioridad]: { label: PRIORIDAD_BY_URGENCIA[ticket.urgencia] },
   };
 
   const data = await mondayRequest<CreateItemResponse>(CREATE_ITEM_MUTATION, {
