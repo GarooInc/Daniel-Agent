@@ -132,19 +132,4 @@ CREATE TABLE IF NOT EXISTS tech_agents (
   slack_channel TEXT NOT NULL,
   slack_bot_user_id TEXT NOT NULL
 );
-
--- Versiones del SYSTEM_PROMPT de Daniel, editables desde el panel admin del Portal RedTec
--- (ver integrations/postgres/agent-prompt.ts). Con historial en vez de overwrite: cada guardado
--- inserta una fila nueva, nunca se pisa una vieja — permite rollback a cualquier versión anterior
--- sin perder el texto. El índice único parcial hace cumplir "a lo sumo una fila activa" a nivel
--- de base de datos (no solo por convención de la app que la escribe): activar una versión nueva
--- requiere desactivar la anterior en la misma transacción, o el INSERT/UPDATE falla.
-CREATE TABLE IF NOT EXISTS agent_prompts (
-  id SERIAL PRIMARY KEY,
-  prompt_text TEXT NOT NULL,
-  activo BOOLEAN NOT NULL DEFAULT false,
-  creado_por VARCHAR(200),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE UNIQUE INDEX IF NOT EXISTS agent_prompts_activo_unique_idx ON agent_prompts (activo) WHERE activo;
 `;
