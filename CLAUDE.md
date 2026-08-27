@@ -8,6 +8,10 @@ Daniel es el agente de soporte (Slack) de RedTec, construido en Node.js/TypeScri
 
 Para contexto histórico completo de decisiones, bugs encontrados/arreglados, y pendientes: **`ESTADO-PROYECTO.md`** (fuente de verdad del estado actual, se actualiza cada sesión) y **`NOTAS-INICIALES.md`** (diseño original v1). Los planes de features grandes viven en `plans/*.md`, commiteados al repo para poder retomarlos desde cualquier máquina.
 
+## Cómo trabajar en este repo
+
+Cualquier sesión de Claude Code que toque código acá debe invocar el skill `karpathy-guidelines` (pensar antes de codear, mínimo código que resuelva el problema, cambios quirúrgicos, criterios de éxito verificables) — encaja con reglas ya existentes en este proyecto como la extracción determinística de datos del ticket (punto 3 más abajo) y "nunca prometerle al cliente algo que no se hizo".
+
 ## Comandos
 
 ```bash
