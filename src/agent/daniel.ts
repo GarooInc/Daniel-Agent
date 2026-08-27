@@ -9,6 +9,7 @@ import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDra
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
 import { listTechAgents } from "../integrations/postgres/tech-agents.js";
+import { findActivePrompt } from "../integrations/postgres/agent-prompt.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -113,7 +114,12 @@ export async function askDaniel(
   // configurado, un perfil desconocido no puede resolver la ambigüedad y el ticket no dispara el
   // aviso al Técnico hasta identificar la empresa (aceptable mientras solo haya un cliente
   // soportado).
-  const techAgents = await listTechAgents();
+  // Prompt editable desde el panel admin del Portal RedTec (ver integrations/postgres/agent-prompt.ts)
+  // — fallback obligatorio al SYSTEM_PROMPT hardcodeado si todavía no hay ninguna versión activa
+  // guardada o si falla la conexión. Daniel nunca se queda sin prompt de sistema por un problema
+  // de Postgres ajeno a esta tabla.
+  const [techAgents, activePrompt] = await Promise.all([listTechAgents(), findActivePrompt()]);
+  const systemPrompt = activePrompt ?? SYSTEM_PROMPT;
   const techAgentConfig =
     techAgents.find((c) => profile?.empresa && c.empresa.toLowerCase() === profile.empresa.toLowerCase()) ??
     (!profile?.empresa && techAgents.length === 1 ? techAgents[0] : undefined);
@@ -124,7 +130,7 @@ export async function askDaniel(
   });
   const model = buildModel(Object.values(toolsByName));
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
-    new SystemMessage(SYSTEM_PROMPT + buildKnownDataNote(effectiveDraft)),
+    new SystemMessage(systemPrompt + buildKnownDataNote(effectiveDraft)),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
     new HumanMessage(userMessage),
   ];
