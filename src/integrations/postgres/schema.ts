@@ -132,4 +132,18 @@ CREATE TABLE IF NOT EXISTS tech_agents (
   slack_channel TEXT NOT NULL,
   slack_bot_user_id TEXT NOT NULL
 );
+
+-- Config de Daniel editable en vivo desde Support-Agent-Panel (system prompt, reglas de
+-- negocio, tools habilitadas). Fila única (id fijo en 1) — sin historial de versiones por
+-- ahora, se suma si hace falta. El panel escribe acá con un rol de Postgres propio, acotado
+-- a SELECT/UPDATE solo sobre esta tabla (ver sql/grant-panel-role.sql, no se commitea con
+-- credenciales). Ver integrations/postgres/agent-config.ts para el lado que lee esto.
+CREATE TABLE IF NOT EXISTS daniel_agent_config (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  system_prompt TEXT,
+  business_rules JSONB NOT NULL DEFAULT '[]',
+  connected_tools JSONB,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by TEXT
+);
 `;
