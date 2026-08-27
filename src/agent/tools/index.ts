@@ -19,6 +19,10 @@ export function buildToolsByName(
   client: WebClient | undefined,
   techAgentConfig: TechAgentConfig | undefined,
   onTicketCreated?: () => void,
+  // Nombres de tools habilitadas desde daniel_agent_config (Support-Agent-Panel). `undefined`/
+  // `null` = todas habilitadas (default antes de que el panel guarde algo) — no confundir con
+  // una lista vacía, que sí desactivaría todas.
+  enabledToolNames?: string[] | null,
 ): Record<string, any> {
   const tools: any[] = [
     searchFaqsTool,
@@ -26,5 +30,6 @@ export function buildToolsByName(
     platformHealthTool,
     createEscalateToMondayTool(slackUserId, effectiveDraft, channelId, client, techAgentConfig, onTicketCreated),
   ];
-  return Object.fromEntries(tools.map((t) => [t.name, t]));
+  const enabled = enabledToolNames ? tools.filter((t) => enabledToolNames.includes(t.name)) : tools;
+  return Object.fromEntries(enabled.map((t) => [t.name, t]));
 }

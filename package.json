@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:e2e": "tsx src/test-e2e.ts",
     "migrate:faqs": "tsx src/migrate-faqs.ts",
-    "migrate:tech-agents": "tsx src/migrate-tech-agents.ts"
+    "migrate:tech-agents": "tsx src/migrate-tech-agents.ts",
+    "migrate:agent-config": "tsx src/migrate-agent-config.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

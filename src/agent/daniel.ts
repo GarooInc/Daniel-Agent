@@ -1,7 +1,6 @@
 import type { WebClient } from "@slack/web-api";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { buildModel } from "./model.js";
-import { SYSTEM_PROMPT } from "./prompt.js";
 import { buildToolsByName } from "./tools/index.js";
 import { appendMessage, clearHistory, getLastMessageAt, getRecentMessages } from "../integrations/postgres/conversation-memory.js";
 import { getCustomerProfile } from "../integrations/postgres/customer-profile.js";
@@ -9,6 +8,7 @@ import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDra
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
 import { listTechAgents } from "../integrations/postgres/tech-agents.js";
+import { getAgentConfig, buildSystemPrompt } from "../integrations/postgres/agent-config.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -55,11 +55,12 @@ export async function askDaniel(
   channelId: string,
   client?: WebClient,
 ): Promise<string> {
-  const [lastMessageAt, historyRaw, profile, ticketDraftRaw] = await Promise.all([
+  const [lastMessageAt, historyRaw, profile, ticketDraftRaw, agentConfig] = await Promise.all([
     getLastMessageAt(slackUserId),
     getRecentMessages(slackUserId),
     getCustomerProfile(slackUserId),
     getTicketDraft(slackUserId),
+    getAgentConfig(),
   ]);
 
   const isNewSession = !lastMessageAt || Date.now() - lastMessageAt.getTime() > SESSION_GAP_MS;
@@ -119,12 +120,20 @@ export async function askDaniel(
     (!profile?.empresa && techAgents.length === 1 ? techAgents[0] : undefined);
 
   let ticketCreated = false;
-  const toolsByName = buildToolsByName(slackUserId, effectiveDraft, channelId, client, techAgentConfig, () => {
-    ticketCreated = true;
-  });
+  const toolsByName = buildToolsByName(
+    slackUserId,
+    effectiveDraft,
+    channelId,
+    client,
+    techAgentConfig,
+    () => {
+      ticketCreated = true;
+    },
+    agentConfig.connectedTools,
+  );
   const model = buildModel(Object.values(toolsByName));
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
-    new SystemMessage(SYSTEM_PROMPT + buildKnownDataNote(effectiveDraft)),
+    new SystemMessage(buildSystemPrompt(agentConfig) + buildKnownDataNote(effectiveDraft)),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
     new HumanMessage(userMessage),
   ];
