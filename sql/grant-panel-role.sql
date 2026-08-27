@@ -1,20 +1,18 @@
--- Rol de Postgres para Support-Agent-Panel: acceso de solo lectura a ticket_conversations (ya
--- en uso) + lectura/escritura acotada a daniel_agent_config (system prompt, reglas de negocio,
--- tools conectadas editables desde el panel). NO ejecutar en CI ni commitear con la contraseña
--- real puesta — reemplazar :'panel_password' con un valor generado y guardarlo en el secret
--- manager del panel, no en este repo.
+-- GRANT idempotente para el rol real de Support-Agent-Panel: `support_panel_reader` (ya
+-- existente, es el mismo que usan para leer ticket_conversations vía DANIEL_DATABASE_URL —
+-- no crear un rol nuevo). Da lectura/escritura acotada a daniel_agent_config (system prompt,
+-- reglas de negocio, tools conectadas editables desde el panel), sin tocar contraseñas.
 --
--- Uso: psql "$DATABASE_URL" -v panel_password='...' -f sql/grant-panel-role.sql
+-- Nota histórica (2026-08-27): esta primera versión del script creaba un rol nuevo
+-- `support_agent_panel` — resultó ser un rol huérfano ya existente en la BD, de origen sin
+-- identificar (no es el rol real del panel ni algo creado por esta coordinación). El GRANT que
+-- se le había dado por error ya se revocó; ver ESTADO-PROYECTO.md para el detalle. Se deja este
+-- script apuntando al rol correcto para evitar que alguien lo reuse mal en el futuro.
+--
+-- Uso: psql "$DATABASE_URL" -f sql/grant-panel-role.sql
 
-CREATE ROLE support_agent_panel WITH LOGIN PASSWORD :'panel_password';
+GRANT SELECT ON ticket_conversations TO support_panel_reader;
 
-GRANT CONNECT ON DATABASE CURRENT_DATABASE() TO support_agent_panel;
-GRANT USAGE ON SCHEMA public TO support_agent_panel;
-
--- Ya existente: lectura de conversaciones para el panel.
-GRANT SELECT ON ticket_conversations TO support_agent_panel;
-
--- Nuevo: lectura/escritura solo de la config de Daniel, nada más. Sin DELETE (la fila es única,
--- id=1, y no debería poder borrarse desde el panel) ni INSERT (la fila la crea la siembra de
--- migrate:agent-config, el panel solo actualiza la que ya existe).
-GRANT SELECT, UPDATE ON daniel_agent_config TO support_agent_panel;
+-- Sin DELETE (la fila es única, id=1, no debería poder borrarse desde el panel) ni INSERT (la
+-- fila la crea la siembra de migrate:agent-config, el panel solo actualiza la que ya existe).
+GRANT SELECT, UPDATE ON daniel_agent_config TO support_panel_reader;
