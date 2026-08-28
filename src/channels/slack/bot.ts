@@ -8,6 +8,7 @@ import { startDebounceWorker, closeDebounceQueue } from "../../messaging/debounc
 import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getPool } from "../../integrations/postgres/client.js";
 import { startRetentionCleanup } from "../../integrations/postgres/retention.js";
+import { startFaqEmbeddingSync } from "../../integrations/postgres/faq-embedding-sync.js";
 import { startWebhookServer } from "../webhook/index.js";
 import { connectRealtime, disconnectRealtime } from "../../integrations/redtec-realtime/client.js";
 
@@ -57,6 +58,7 @@ export async function startSlackBot(): Promise<void> {
   try {
     await getPool();
     startRetentionCleanup();
+    startFaqEmbeddingSync();
     logger.info("Postgres conectado (calentamiento ok)");
   } catch (err) {
     logger.error({ err }, "No se pudo calentar la conexión a Postgres al arrancar — se reintentará en el próximo mensaje");

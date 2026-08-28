@@ -16,3 +16,12 @@ GRANT SELECT ON ticket_conversations TO support_panel_reader;
 -- Sin DELETE (la fila es única, id=1, no debería poder borrarse desde el panel) ni INSERT (la
 -- fila la crea la siembra de migrate:agent-config, el panel solo actualiza la que ya existe).
 GRANT SELECT, UPDATE ON daniel_agent_config TO support_panel_reader;
+
+-- Edición de pregunta/respuesta de FAQs desde /conocimiento (Base de Conocimiento del panel),
+-- coordinado con la sesión de Support-Agent-Panel (2026-08-28). support_panel_reader ya tenía
+-- SELECT en documents (usado para listar FAQs en el panel); este GRANT solo suma UPDATE acotado
+-- a esas 3 columnas para que el panel nunca pueda escribir `embedding` directo (un vector
+-- cualquiera ahí rompe la búsqueda semántica sin error visible) — el recálculo real corre de
+-- este lado (integrations/postgres/faq-embedding-sync.ts, setInterval cada 60s, reembede todo
+-- `documents`).
+GRANT UPDATE (pregunta, respuesta, updated_at) ON documents TO support_panel_reader;
