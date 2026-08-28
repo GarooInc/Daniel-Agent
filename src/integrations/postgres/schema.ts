@@ -146,4 +146,14 @@ CREATE TABLE IF NOT EXISTS daniel_agent_config (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by TEXT
 );
+
+-- Heartbeat de proceso para el indicador "Daniel en línea" de Support-Agent-Panel (Topbar).
+-- Fila única (id fijo en 1), actualizada cada ~20-30s por integrations/postgres/heartbeat.ts
+-- mientras el proceso está vivo. El panel decide online/offline comparando la antigüedad de
+-- updated_at (no hay avisos push ni endpoint HTTP — ver ESTADO-PROYECTO.md para la comparación
+-- de opciones). Rol support_panel_reader tiene SELECT nada más (sql/grant-panel-role.sql).
+CREATE TABLE IF NOT EXISTS daniel_heartbeat (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;

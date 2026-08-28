@@ -9,6 +9,7 @@ import { closeRedis, getRedis } from "../../integrations/redis/client.js";
 import { getPool } from "../../integrations/postgres/client.js";
 import { startRetentionCleanup } from "../../integrations/postgres/retention.js";
 import { startFaqEmbeddingSync } from "../../integrations/postgres/faq-embedding-sync.js";
+import { startHeartbeat } from "../../integrations/postgres/heartbeat.js";
 import { startWebhookServer } from "../webhook/index.js";
 import { connectRealtime, disconnectRealtime } from "../../integrations/redtec-realtime/client.js";
 
@@ -59,6 +60,7 @@ export async function startSlackBot(): Promise<void> {
     await getPool();
     startRetentionCleanup();
     startFaqEmbeddingSync();
+    startHeartbeat();
     logger.info("Postgres conectado (calentamiento ok)");
   } catch (err) {
     logger.error({ err }, "No se pudo calentar la conexión a Postgres al arrancar — se reintentará en el próximo mensaje");

@@ -25,3 +25,7 @@ GRANT SELECT, UPDATE ON daniel_agent_config TO support_panel_reader;
 -- este lado (integrations/postgres/faq-embedding-sync.ts, setInterval cada 60s, reembede todo
 -- `documents`).
 GRANT UPDATE (pregunta, respuesta, updated_at) ON documents TO support_panel_reader;
+
+-- Indicador "Daniel en línea" del Topbar del panel (2026-08-28) — lee la antigüedad de
+-- daniel_heartbeat.updated_at para decidir online/offline. Solo lectura.
+GRANT SELECT ON daniel_heartbeat TO support_panel_reader;
