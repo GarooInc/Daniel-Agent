@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-27
+Última actualización: 2026-08-28
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -189,6 +189,12 @@ Regla simple para el futuro: nueva tool → un archivo en `agent/tools/`; nuevo 
   - Asimetría en el texto embebido de `buscar_faqs` cuando el producto se pasa como filtro aparte.
   - Cold-start de Mongo en cada redeploy (el más grave — tumbaba cualquier mensaje, no solo FAQs).
   - Scope `users:read` faltante en Slack para el fallback de auto-escalación.
+
+- [x] **Edición de FAQs desde Support-Agent-Panel + heartbeat para el indicador "en línea" (2026-08-28, coordinado por Slack entre sesiones de Claude Code, deployado y verificado en vivo)**: dos features chicas del mismo panel externo, ver detalle completo en Pendientes #19 y #20.
+  - `integrations/postgres/faq-embedding-sync.ts`: `setInterval` cada 60s que reembede todo `documents` vía OpenRouter tras cualquier edición de `pregunta`/`respuesta` desde el panel — sin eso el panel podía invalidar `buscar_faqs` sin error visible.
+  - `integrations/postgres/heartbeat.ts`: `setInterval` cada 25s que actualiza `daniel_heartbeat` — el panel lo lee para el punto verde/rojo "Daniel en línea" del Topbar.
+  - `sql/grant-panel-role.sql`: 3 GRANT nuevos para `support_panel_reader` (`UPDATE` acotado a `pregunta`/`respuesta`/`updated_at` en `documents`, `SELECT` en `daniel_heartbeat`), todos aplicados a mano por SSH/`docker exec` contra el Postgres real y verificados (`\dp documents`, query directa a `daniel_heartbeat`).
+  - Deploy confirmado en logs de producción corriendo ambos jobs sin errores.
 
 **Nota de red de esta máquina**: el fetch nativo de Node (`undici`) tiene timeouts intermitentes (`ETIMEDOUT`) contra hosts externos (pasó con `registry.npmjs.org`, `api.monday.com` y hasta `openrouter.ai`) que `curl` no sufre — parece un problema de resolución/preferencia IPv6 en esta máquina. Si el bot corriendo en otra máquina tiene llamadas que cuelgan o tardan mucho, probar arrancándolo con `NODE_OPTIONS="--dns-result-order=ipv4first" npm run dev:slack` antes de asumir que es un bug de la app.
 
