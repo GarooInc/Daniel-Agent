@@ -29,3 +29,16 @@ GRANT UPDATE (pregunta, respuesta, updated_at) ON documents TO support_panel_rea
 -- Indicador "Daniel en línea" del Topbar del panel (2026-08-28) — lee la antigüedad de
 -- daniel_heartbeat.updated_at para decidir online/offline. Solo lectura.
 GRANT SELECT ON daniel_heartbeat TO support_panel_reader;
+
+-- Sección "Registro de actividad" del panel (2026-08-30), coordinado con la sesión del panel
+-- y confirmado por Jorge directamente (incluye el riesgo aceptado de mostrar
+-- chat_messages.content completo en el panel sin login todavía). Solo lectura, sin tocar
+-- columnas de escritura.
+--
+-- Notas para quien construya la vista, ya en conocimiento del panel:
+--   - chat_messages no tiene FK a ticket_conversations; se poda a 100 filas por usuario y se
+--     borra completa al crear un ticket o al detectar sesión nueva (+1h) — no es un log durable.
+--   - webhook_raw_events.headers NO debe renderizarse en el panel: guarda los headers crudos
+--     del request, incluido x-webhook-secret si el caller lo manda (valor real de
+--     WEBHOOK_SECRET). El panel solo va a mostrar route/received_at/parsed/body.
+GRANT SELECT ON chat_messages, webhook_raw_events TO support_panel_reader;
