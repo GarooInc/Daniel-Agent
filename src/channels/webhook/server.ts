@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { saveWebhookEvent } from "../../integrations/postgres/webhook-events.js";
 import { handleTicketStatusChanged } from "./ticket-status-handler.js";
+import { handleMondayNativeEvent, isMondayChallenge } from "./monday-webhook-handler.js";
 
 // Ruta genérica para datos internos (otros agentes de RedTec, sistemas de la empresa) mientras
 // no se conoce la estructura real de lo que va a llegar. Una vez que sepamos el origen y el
@@ -13,11 +14,16 @@ import { handleTicketStatusChanged } from "./ticket-status-handler.js";
 // plans/2026-08-12-agente-tecnico-n8n-spectrum.md, sección E.2): esa correlación pasó a ser
 // 100% por Slack (ver channels/slack/tech-agent-response-handler.ts), no por este webhook.
 const ROUTE = "/webhook/internal";
+// Ruta separada para la automatización nativa de webhooks de Monday.com (a diferencia de
+// /webhook/internal, que recibe el shape custom que reenvía el sistema interno de Hugo). Monday
+// no puede mandar el header X-Webhook-Secret en un webhook nativo estándar, así que esta ruta no
+// lo valida — ver monday-webhook-handler.ts para la validación por boardId/columnId en su lugar.
+const MONDAY_ROUTE = "/webhook/monday";
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 export function startWebhookServer(): Server {
   const server = createServer((req, res) => {
-    if (req.url !== ROUTE) {
+    if (req.url !== ROUTE && req.url !== MONDAY_ROUTE) {
       res.writeHead(404).end();
       return;
     }
@@ -25,7 +31,7 @@ export function startWebhookServer(): Server {
       res.writeHead(405).end();
       return;
     }
-    if (env.webhookSecret && req.headers["x-webhook-secret"] !== env.webhookSecret) {
+    if (req.url === ROUTE && env.webhookSecret && req.headers["x-webhook-secret"] !== env.webhookSecret) {
       logger.warn({ route: ROUTE }, "Webhook rechazado: secreto ausente o incorrecto");
       res.writeHead(401).end();
       return;
@@ -56,7 +62,23 @@ export function startWebhookServer(): Server {
         parsed = false;
       }
 
-      logger.info({ route: ROUTE, headers: req.headers, body, parsed }, "Webhook recibido");
+      logger.info({ route: req.url, headers: req.headers, body, parsed }, "Webhook recibido");
+
+      if (req.url === MONDAY_ROUTE) {
+        // El challenge de conexión de Monday exige que se le devuelva exactamente el mismo
+        // valor, sin procesarlo como evento — se responde antes de tocar Postgres/Slack.
+        if (isMondayChallenge(body)) {
+          res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ challenge: body.challenge }));
+          return;
+        }
+
+        handleMondayNativeEvent(body).catch((err) => {
+          logger.error({ err }, "Falló el procesamiento del evento nativo de Monday");
+        });
+
+        res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
+        return;
+      }
 
       saveWebhookEvent(ROUTE, req.headers, rawBody, body, parsed).catch((err) => {
         logger.error({ err }, "No se pudo guardar el evento del webhook en Postgres");
