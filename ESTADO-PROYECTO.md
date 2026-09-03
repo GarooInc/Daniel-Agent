@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-08-31
+Última actualización: 2026-09-03
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -688,6 +688,8 @@ También decidido el mismo día: convención estándar para datos que llegan de 
     - **Nota**: a diferencia de `/webhook/internal`, los eventos de `/webhook/monday` no se guardan en `webhook_raw_events` — no se pidió, no se agregó. Si hace falta poder auditar/debuggear estos eventos después, es un cambio chico pendiente.
     - Type-check limpio, 84/84 tests verdes (test nuevo `monday-webhook-handler.test.ts`, mismo patrón que `ticket-status-handler.test.ts`).
     - **Pendiente real, bloqueante para probar de punta a punta**: (1) Jorge tiene que habilitar HTTPS en Coolify para el dominio; (2) el panel va a probar el endpoint nuevo con `curl` simulando challenge + evento real antes de que Hugo reintente conectar la automatización de verdad.
+
+24. **[BLOQUEADO, confirmado 2026-09-03] Nuevo canal: Daniel escuchando y mandando mensajes en grupos de WhatsApp, vía un WebSocket de RedTec ya existente.** Jorge pidió sumar este canal reusando un servicio de escucha de WhatsApp que RedTec ya tiene corriendo. Se confirmó por grep/lectura directa del código que **hoy no existe ninguna integración de WhatsApp en el repo**: el único WebSocket real es `integrations/redtec-realtime/client.ts` (Socket.IO, solo métricas de plataforma/eventos de CRM — leads, citas — nada de mensajería), y `package.json` no tiene ninguna librería de WhatsApp (`baileys`, `whatsapp-web.js`, `twilio`, etc.). El único precedente es la nota suelta del punto 15 (WhatsApp/campaña, sin contexto suficiente, sigue sin poder actuarse) y la mención en `NOTAS-INICIALES.md`/roadmap de WhatsApp como canal futuro (motivó el diseño de `askDaniel()` channel-agnostic y el debounce con Redis, nunca implementado). **Bloqueado esperando que Fernando (RedTec) confirme el contrato de esa conexión**: (a) si es la misma conexión de `redtec-realtime` con eventos nuevos o un servicio/URL separado; (b) nombre y payload del evento de entrada por mensaje de grupo (id de grupo, remitente, texto, reply/adjuntos); (c) mecanismo de envío (emit del mismo socket vs. endpoint HTTP aparte) y su payload; (d) alcance — todos los grupos que reenvíe el socket o una lista/mapeo por cliente (mismo patrón que `tech_agents`), y si Daniel responde a cualquier mensaje o solo si lo mencionan (como hoy en canales de Slack). Sin nada de esto no se empieza a scaffoldear el canal nuevo — mismo criterio que ya costó bugs reales acá (no inventar el shape de un sistema externo, ver puntos 13/23). Detalle también guardado en memoria de Claude Code (`project_daniel_support_agent.md`).
 
 ## Referencia rápida del stack
 
