@@ -5,11 +5,15 @@ const markHandoffAnswered = vi.fn().mockResolvedValue(undefined);
 const appendMessage = vi.fn().mockResolvedValue(undefined);
 const addTicketUpdate = vi.fn().mockResolvedValue(undefined);
 const markTicketReady = vi.fn().mockResolvedValue(undefined);
+const getCustomerProfile = vi.fn();
+const compileClientWikiFromDiagnosis = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("./extract-tech-diagnosis.js", () => ({ extractTechDiagnosis }));
 vi.mock("../integrations/postgres/tech-agent-handoff.js", () => ({ markHandoffAnswered }));
 vi.mock("../integrations/postgres/conversation-memory.js", () => ({ appendMessage }));
+vi.mock("../integrations/postgres/customer-profile.js", () => ({ getCustomerProfile }));
 vi.mock("../integrations/monday/index.js", () => ({ addTicketUpdate, markTicketReady }));
+vi.mock("./compile-client-wiki.js", () => ({ compileClientWikiFromDiagnosis }));
 
 const { deliverTechDiagnosis } = await import("./deliver-tech-diagnosis.js");
 
@@ -31,6 +35,7 @@ function fakeClient() {
 describe("deliverTechDiagnosis", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getCustomerProfile.mockResolvedValue({ empresa: "Spectrum" });
   });
 
   it("le manda al cliente el resumen sin jerga y marca el handoff como respondido cuando hay diagnóstico concreto", async () => {
@@ -43,6 +48,7 @@ describe("deliverTechDiagnosis", () => {
     const client = fakeClient();
 
     await deliverTechDiagnosis(client, HANDOFF, "el nodo Webhook explota con JSON inválido, ya lo arreglé");
+    await new Promise((r) => setTimeout(r, 0)); // deja asentar la wiki (best-effort, no bloquea la entrega)
 
     expect(markHandoffAnswered).toHaveBeenCalledWith(
       "1699999999.000100",
@@ -59,6 +65,32 @@ describe("deliverTechDiagnosis", () => {
     expect(appendMessage).toHaveBeenCalledWith("U_CLIENTE", "ai", expect.stringContaining("revisó tu caso"));
     expect(addTicketUpdate).toHaveBeenCalledWith("3200000000", expect.stringContaining("el nodo Webhook explota"));
     expect(markTicketReady).toHaveBeenCalledWith("3200000000");
+    expect(compileClientWikiFromDiagnosis).toHaveBeenCalledWith(
+      "Spectrum",
+      HANDOFF,
+      expect.objectContaining({ causaRaiz: "El nodo Webhook no valida el JSON entrante" }),
+    );
+  });
+
+  it("no actualiza la wiki del cliente si no se puede resolver su empresa", async () => {
+    getCustomerProfile.mockResolvedValue({ nombreCliente: "Alguien" }); // sin empresa
+    extractTechDiagnosis.mockResolvedValue({ causaRaiz: "algo", resuelto: true, resumenParaCliente: "listo" });
+    const client = fakeClient();
+
+    await deliverTechDiagnosis(client, HANDOFF, "listo");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(compileClientWikiFromDiagnosis).not.toHaveBeenCalled();
+    expect(client.chat.postMessage).toHaveBeenCalled(); // la entrega al cliente no se ve afectada
+  });
+
+  it("no pierde la entrega al cliente si falla la actualización de la wiki del cliente", async () => {
+    compileClientWikiFromDiagnosis.mockRejectedValue(new Error("OpenRouter timeout"));
+    extractTechDiagnosis.mockResolvedValue({ causaRaiz: "algo", resuelto: true, resumenParaCliente: "listo" });
+    const client = fakeClient();
+
+    await expect(deliverTechDiagnosis(client, HANDOFF, "listo")).resolves.toBeUndefined();
+    expect(client.chat.postMessage).toHaveBeenCalled();
   });
 
   it("avisa que sigue investigando cuando el diagnóstico todavía no es concreto, y no marca el ticket como Listo", async () => {

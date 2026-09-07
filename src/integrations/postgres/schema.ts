@@ -168,4 +168,19 @@ CREATE TABLE IF NOT EXISTS whatsapp_groups (
   nombre_grupo TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Base de conocimiento técnico por cliente (2026-09-07, ver plans/2026-09-07-client-wiki.md),
+-- patrón "LLM Wiki" de Karpathy adaptado a Postgres (el gist original asume archivos en disco;
+-- este contenedor es stateless, así que la página compilada vive acá en vez de en un .md).
+-- tech_agent_handoffs ya hace de capa "raw" (inmutable) — esta tabla es la capa "wiki"
+-- compilada: una página por cliente que se FUSIONA con cada diagnóstico nuevo, no se apila.
+-- Objetivo: que Daniel pueda responder sobre el sistema de un cliente con una lectura
+-- determinística (por empresa, sin embeddings ni búsqueda) en vez de consultar al Agente
+-- Técnico en vivo en cada pregunta.
+CREATE TABLE IF NOT EXISTS client_wiki (
+  empresa TEXT PRIMARY KEY,
+  contenido TEXT NOT NULL,
+  fuentes TEXT[] NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;

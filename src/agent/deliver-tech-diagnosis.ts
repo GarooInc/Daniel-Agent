@@ -2,7 +2,9 @@ import type { WebClient } from "@slack/web-api";
 import { extractTechDiagnosis } from "./extract-tech-diagnosis.js";
 import { markHandoffAnswered, type TechAgentHandoffDoc } from "../integrations/postgres/tech-agent-handoff.js";
 import { appendMessage } from "../integrations/postgres/conversation-memory.js";
+import { getCustomerProfile } from "../integrations/postgres/customer-profile.js";
 import { addTicketUpdate, markTicketReady } from "../integrations/monday/index.js";
+import { compileClientWikiFromDiagnosis } from "./compile-client-wiki.js";
 import { toSlackMrkdwn } from "../channels/slack/format.js";
 import { logger } from "../config/logger.js";
 
@@ -34,4 +36,20 @@ export async function deliverTechDiagnosis(client: WebClient, handoff: TechAgent
       logger.warn({ err, mondayItemId: handoff.mondayItemId }, "No se pudo marcar el ticket como Listo en Monday");
     });
   }
+
+  // Compila el diagnóstico en la página de conocimiento del cliente (patrón LLM Wiki, ver
+  // plans/2026-09-07-client-wiki.md) — best-effort, mismo criterio que el resto de los efectos
+  // secundarios de esta función. Regla de seguridad: sin empresa conocida no hay a qué página
+  // fusionar esto — mejor no tocar nada que guardarlo sin dueño claro.
+  getCustomerProfile(handoff.originalSlackUserId)
+    .then((profile) => {
+      if (!profile?.empresa) {
+        logger.warn({ threadTs: handoff.threadTs }, "No se actualizó la wiki del cliente: empresa desconocida");
+        return;
+      }
+      return compileClientWikiFromDiagnosis(profile.empresa, handoff, diagnosis);
+    })
+    .catch((err) => {
+      logger.warn({ err, threadTs: handoff.threadTs }, "No se pudo actualizar la wiki de conocimiento del cliente");
+    });
 }
