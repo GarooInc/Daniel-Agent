@@ -19,11 +19,12 @@ export function connectEvolutionSocket(): Socket | undefined {
   }
 
   // Namespace de instancia confirmado por Fernando (2026-09-06): Socket.io contra
-  // `{url}/{instance}`. El nombre exacto del campo de auth (`apikey`) sigue sin confirmar
-  // explícitamente contra un connect real — punto abierto #2 del plan (probar primero contra
-  // un grupo de prueba antes de habilitar en la instancia compartida de producción).
+  // `{url}/{instance}`. Probado en vivo (2026-09-07) contra la instancia real: mandar la key
+  // solo por `auth` (mecanismo interno de Socket.IO, recién visible del lado del server DESPUÉS
+  // del handshake de engine.io) daba 403 "apiKey is required" — Evolution API la valida en el
+  // handshake HTTP mismo, así que tiene que ir en la query string de la conexión.
   socket = io(`${env.whatsappEvolutionUrl}/${env.whatsappEvolutionInstance}`, {
-    auth: { apikey: env.whatsappEvolutionApiKey },
+    query: { apikey: env.whatsappEvolutionApiKey },
   });
 
   socket.on("connect", () => logger.info("WhatsApp (Evolution API) conectado"));
