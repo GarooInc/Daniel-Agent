@@ -42,7 +42,17 @@ export function registerMessageHandler(socket: Socket): void {
       const groupJid = msg.key.remoteJid;
       if (!groupJid || !groupJid.endsWith("@g.us")) continue; // solo grupos, no DMs 1:1
 
-      if (!isMentioned(msg)) continue;
+      const mencionado = isMentioned(msg);
+      // A nivel info (no debug) a propósito: sin esto, si WHATSAPP_BOT_JID está mal (punto
+      // abierto #4 del plan) un mensaje que sí mencionaba a Daniel se ignora en silencio y no
+      // queda ningún rastro de por qué — mismo espíritu que el logging de scores de
+      // search-faqs.ts. No loguea el texto del mensaje, solo metadata de mención.
+      logger.info(
+        { groupJid, mentionedJid: msg.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [], mencionado },
+        "Mensaje de grupo de WhatsApp recibido",
+      );
+
+      if (!mencionado) continue;
 
       const texto = extractText(msg);
       if (!texto) continue;
