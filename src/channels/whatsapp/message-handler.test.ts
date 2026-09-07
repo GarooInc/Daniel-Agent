@@ -12,7 +12,10 @@ const { registerMessageHandler } = await import("./message-handler.js");
 function fakeSocket() {
   const handlers: Record<string, (payload: unknown) => void> = {};
   return {
-    socket: { on: (event: string, fn: (payload: unknown) => void) => (handlers[event] = fn) } as any,
+    socket: {
+      on: (event: string, fn: (payload: unknown) => void) => (handlers[event] = fn),
+      onAny: () => {}, // solo diagnóstico (modo global, ver message-handler.ts) — no afecta la lógica bajo test
+    } as any,
     emit: (event: string, payload: unknown) => handlers[event]?.(payload),
   };
 }

@@ -18,12 +18,14 @@ export function connectEvolutionSocket(): Socket | undefined {
     return undefined;
   }
 
-  // Namespace de instancia confirmado por Fernando (2026-09-06): Socket.io contra
-  // `{url}/{instance}`. Probado en vivo (2026-09-07) contra la instancia real: mandar la key
-  // solo por `auth` (mecanismo interno de Socket.IO, recién visible del lado del server DESPUÉS
-  // del handshake de engine.io) daba 403 "apiKey is required" — Evolution API la valida en el
-  // handshake HTTP mismo, así que tiene que ir en la query string de la conexión.
-  socket = io(`${env.whatsappEvolutionUrl}/${env.whatsappEvolutionInstance}`, {
+  // Conexión al namespace RAÍZ, no a `{url}/{instance}` — confirmado por Fernando en vivo
+  // (2026-09-07): esta instalación de Evolution API está en modo "global" (todos los eventos de
+  // todas las instancias del servidor llegan acá, no uno por instancia), así que hay que
+  // filtrar por un campo `instance` dentro de cada evento (ver message-handler.ts) en vez de
+  // depender del namespace para aislar solo los eventos de RedtecBot. La key va en la query
+  // string (no en `auth`, que probado en vivo daba 403 "apiKey is required" — Evolution API la
+  // valida en el handshake HTTP mismo, antes de que Socket.IO procese el auth interno).
+  socket = io(env.whatsappEvolutionUrl, {
     query: { apikey: env.whatsappEvolutionApiKey },
   });
 

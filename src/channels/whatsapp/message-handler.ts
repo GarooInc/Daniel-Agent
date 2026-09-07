@@ -35,11 +35,21 @@ function isMentioned(msg: WhatsAppMessage): boolean {
 }
 
 export function registerMessageHandler(socket: Socket): void {
+  // TEMPORAL (2026-09-07): esta instalación de Evolution API está en modo "global" (confirmado
+  // por Fernando en vivo) — todavía no sabemos el nombre exacto del evento ni la forma del
+  // payload en ese modo (el namespace por instancia SÍ traía "MESSAGES_UPSERT" tal cual, pero
+  // en modo global puede diferir). Loguea CUALQUIER evento tal cual llega para confirmarlo con
+  // datos reales en vez de adivinar una tercera vez — sacar este bloque en cuanto se confirme
+  // (ver plans/2026-09-06-canal-whatsapp-evolution-api.md).
+  socket.onAny((eventName, payload) => {
+    logger.info({ eventName, payload }, "Evento crudo de WhatsApp recibido (diagnóstico modo global)");
+  });
+
   // Nombre del evento confirmado contra la config real de la instancia (GET
   // /instance/fetchInstances, 2026-09-06): "MESSAGES_UPSERT" (mayúsculas, guión bajo) — no
   // "messages.upsert" (esa es la convención interna de Baileys, no la que Evolution API expone
-  // sobre Socket.IO). Bug real encontrado en vivo (2026-09-07): con el nombre en minúsculas la
-  // conexión quedaba sana pero nunca llegaba ningún evento.
+  // sobre Socket.IO). Se mantiene por si el modo global usa el mismo nombre, ver el bloque
+  // onAny() de arriba para confirmarlo si no.
   socket.on("MESSAGES_UPSERT", (payload: MessagesUpsertPayload) => {
     for (const msg of payload.messages ?? []) {
       if (msg.key.fromMe) continue;
