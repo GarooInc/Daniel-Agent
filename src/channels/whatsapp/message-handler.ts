@@ -7,7 +7,7 @@ import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
 
-// Shape de Baileys/Evolution API para el evento `messages.upsert` — solo los campos que
+// Shape de Baileys/Evolution API para el evento `MESSAGES_UPSERT` — solo los campos que
 // usamos, el resto del payload (push name, timestamps, etc.) se ignora a propósito.
 interface WhatsAppMessage {
   key: { remoteJid?: string; fromMe?: boolean };
@@ -35,7 +35,12 @@ function isMentioned(msg: WhatsAppMessage): boolean {
 }
 
 export function registerMessageHandler(socket: Socket): void {
-  socket.on("messages.upsert", (payload: MessagesUpsertPayload) => {
+  // Nombre del evento confirmado contra la config real de la instancia (GET
+  // /instance/fetchInstances, 2026-09-06): "MESSAGES_UPSERT" (mayúsculas, guión bajo) — no
+  // "messages.upsert" (esa es la convención interna de Baileys, no la que Evolution API expone
+  // sobre Socket.IO). Bug real encontrado en vivo (2026-09-07): con el nombre en minúsculas la
+  // conexión quedaba sana pero nunca llegaba ningún evento.
+  socket.on("MESSAGES_UPSERT", (payload: MessagesUpsertPayload) => {
     for (const msg of payload.messages ?? []) {
       if (msg.key.fromMe) continue;
 
