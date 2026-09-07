@@ -31,12 +31,12 @@ Por eso, alcance propuesto para la primera pasada:
 
 ## Puntos abiertos que hay que confirmar antes de escribir código (no asumir)
 
-1. **¿De dónde sale el mapeo `group_jid → empresa` que usa Daniel?** `ra_whatsapp_groups` vive del lado del sistema de Fernando (`api-mainrealstate`, otra base de datos, posiblemente otro motor). Este repo no tiene acceso hoy a esa base, y salir a leer la base de otro sistema en el camino caliente de cada mensaje repite exactamente el problema que ya se evitó en el plan de realtime (no inventar acceso a infra ajena sin confirmarlo). **Alternativa recomendada, mismo patrón que `tech_agents`** (que se migró de hardcodeado a tabla Postgres propia justamente para que sumar un cliente sea un `INSERT`, no un deploy — ver `config/tech-agents.ts`): tabla nueva **`whatsapp_groups`** en el Postgres de Daniel, `group_jid` (PK) → `empresa` (mismo campo que ya usa `customers.empresa` / `findTechAgentConfig`), poblada a mano (o por un ítem de trabajo aparte que la sincronice desde `ra_whatsapp_groups` si Fernando expone una forma de consultarla — a confirmar con él, no asumir que hay una API para eso hoy). **Confirmar con Jorge cuál de las dos vías toma.**
-2. **¿Puede Daniel conectarse como un segundo cliente Socket.io a la misma instancia sin pisar la conexión que ya usa `api-mainrealstate`?** La guía de Fernando no lo dice explícitamente. Evolution API normalmente soporta múltiples listeners sobre el mismo namespace de instancia (es pub/sub, no una sesión exclusiva), pero conviene confirmarlo antes de deployar contra la instancia compartida en producción — un error acá afecta al sistema de Fernando también, no solo a Daniel.
-3. **Contrato exacto de envío** (para responder, no solo escuchar): la hipótesis ya documentada en el punto 24 es `POST /message/sendText/{instance}` con `{ number: groupJid, text }`. Fernando no lo confirmó explícitamente en esta respuesta (solo habló del lado de escucha/WebSocket) — confirmar antes de implementar el lado de envío, aunque sea con un curl de prueba contra un grupo de prueba.
-4. **Formato exacto de `mentionedJid` / cómo detectar que mencionaron a Daniel.** Falta confirmar el JID del propio bot dentro de esos grupos (equivalente al `BOT_USER_ID` de Slack) — sale de la respuesta de `connect`/`instance.info` de Evolution API o de mandar un mensaje de prueba y mirar el payload crudo, no de la documentación genérica.
+1. **[CERRADO 2026-09-06] ¿De dónde sale el mapeo `group_jid → empresa` que usa Daniel?** Jorge confirmó: tabla propia **`whatsapp_groups`** en el Postgres de Daniel (mismo patrón que `tech_agents`), no `ra_whatsapp_groups`. Implementado — ver `integrations/postgres/whatsapp-groups.ts`.
+2. **[CASI CERRADO 2026-09-06, sin probar de punta a punta] ¿Puede Daniel conectarse como un segundo cliente Socket.io a la misma instancia sin pisar la conexión que ya usa `api-mainrealstate`?** Confirmado por `GET /instance/fetchInstances` (real, contra `send.redtecsystems.com`, con permiso explícito de Jorge para un test de solo lectura): la instancia `RedtecBot` tiene su websocket habilitado a nivel de servidor (`Websocket.enabled: true`, eventos `MESSAGES_UPSERT`/`GROUPS_UPSERT`/`GROUP_UPDATE`) — es una config de broadcast del lado de Evolution API, no una sesión exclusiva de un solo cliente, así que un segundo listener Socket.io no debería desconectar al primero. **No probado empíricamente** (abrir el socket de verdad para confirmarlo es una conexión persistente contra la instancia real, fuera del alcance del permiso de "solo GET" — falta ese paso antes de habilitar en producción).
+3. **[SIGUE ABIERTO] Contrato exacto de envío** (para responder, no solo escuchar): la hipótesis ya documentada en el punto 24 es `POST /message/sendText/{instance}` con `{ number: groupJid, text }`. Fernando no lo confirmó explícitamente, y Jorge decidió (2026-09-06) no probarlo todavía por no tener a mano un grupo de prueba seguro — **esperar confirmación explícita de Fernando, o un grupo de prueba, antes de confiar en `send-message.ts`**.
+4. **[CASI CERRADO 2026-09-06] Formato exacto de `mentionedJid` / cómo detectar que mencionaron a Daniel.** El JID propio del bot (equivalente al `BOT_USER_ID` de Slack) es `13322311881@s.whatsapp.net` (`ownerJid` de la instancia `RedtecBot`, confirmado por `GET /instance/fetchInstances`). **Falta confirmar** que ese mismo JID es el que aparece en `contextInfo.mentionedJid` cuando alguien menciona al bot dentro de un grupo real (solo se ve con un mensaje real, no con un GET) — hasta entonces, cargar `WHATSAPP_BOT_JID=13322311881@s.whatsapp.net` es la mejor hipótesis disponible, no una confirmación de punta a punta.
 
-Mientras estos 4 puntos no estén confirmados, el código se implementa igual que el de realtime: **arranca sin romper nada si `WHATSAPP_EVOLUTION_URL`/`WHATSAPP_EVOLUTION_API_KEY` no están seteadas** (loguea deshabilitado, resto del bot sigue andando), para poder mergear ya y activar la conexión real en cuanto los puntos 1-4 estén resueltos.
+Mientras el punto 3 no esté confirmado, el código se implementa igual que el de realtime: **arranca sin romper nada si `WHATSAPP_EVOLUTION_URL`/`WHATSAPP_EVOLUTION_API_KEY` no están seteadas** (loguea deshabilitado, resto del bot sigue andando), para poder mergear ya y activar la conexión real en cuanto quede confirmado.
 
 ## Diseño
 
@@ -65,22 +65,22 @@ src/channels/whatsapp/
 
 ## Datos de referencia (grupos que ve hoy el número compartido, pasados por Fernando 2026-09-06)
 
-Sin clasificar todavía — **no asumir tenant_id por el nombre**, es justo el paso manual que describe Fernando. Se deja acá para que quien puebla `whatsapp_groups` no tenga que volver a pedirle la lista:
+**[CLASIFICADO 2026-09-06 por Jorge, sembrado en código]** — `npm run migrate:whatsapp-groups` (`src/migrate-whatsapp-groups.ts`) siembra esta clasificación real, idempotente. **Pendiente de correr contra producción**: hace falta deployar este código primero (la tabla `whatsapp_groups` no existe todavía en producción, se crea sola al primer connect vía `schema.ts`) y recién ahí correr el script — nada de esto se activó ni se corrió contra producción en esta sesión.
 
-| group_jid | nombre visible | ¿es cliente? |
+| group_jid | nombre visible | empresa (`whatsapp_groups`) |
 |---|---|---|
-| `120363408879151065@g.us` | Cofiño | a confirmar |
-| `120363429256024611@g.us` | Expansión Redtec (Garoo) | a confirmar |
-| `120363407997314089@g.us` | Front End - Garoo | probablemente interno |
-| `120363392107150448@g.us` | RedTec Dev | probablemente interno |
-| `120363410662746111@g.us` | RedTec <> Reynoso Bienes Raices | cliente |
-| `120363428875380678@g.us` | RedTec AI <> Grupo Althura | cliente |
-| `120363426250050151@g.us` | RedTec AI <> Constructora Rosero | cliente |
-| `120363430598286467@g.us` | Mundo Verde | cliente |
-| `120363413744935411@g.us` | RedtecAi | probablemente interno |
-| `120363403874344508@g.us` | RedTec <> Bravante | cliente |
-| `120363409107032925@g.us` | RedTec x RNR | cliente (¿mismo tenant que la fila siguiente?) |
-| `120363428188434247@g.us` | TRAFICO RFSCRS :::: RNR.23 | a confirmar |
+| `120363408879151065@g.us` | Cofiño | Cofiño |
+| `120363429256024611@g.us` | Expansión Redtec (Garoo) | — interno, no mapeado |
+| `120363407997314089@g.us` | Front End - Garoo | — interno, no mapeado |
+| `120363392107150448@g.us` | RedTec Dev | — interno, no mapeado |
+| `120363410662746111@g.us` | RedTec <> Reynoso Bienes Raices | Reynoso Bienes Raices |
+| `120363428875380678@g.us` | RedTec AI <> Grupo Althura | Grupo Althura |
+| `120363426250050151@g.us` | RedTec AI <> Constructora Rosero | Constructora Rosero |
+| `120363430598286467@g.us` | Mundo Verde | Mundo Verde |
+| `120363413744935411@g.us` | RedtecAi | — interno, no mapeado |
+| `120363403874344508@g.us` | RedTec <> Bravante | Bravante |
+| `120363409107032925@g.us` | RedTec x RNR | RNR |
+| `120363428188434247@g.us` | TRAFICO RFSCRS :::: RNR.23 | RNR (mismo tenant que la fila anterior, confirmado por Jorge) |
 
 ## Archivos a tocar (cuando los puntos abiertos estén resueltos)
 

@@ -12,6 +12,7 @@ import { startFaqEmbeddingSync } from "../../integrations/postgres/faq-embedding
 import { startHeartbeat } from "../../integrations/postgres/heartbeat.js";
 import { startWebhookServer } from "../webhook/index.js";
 import { connectRealtime, disconnectRealtime } from "../../integrations/redtec-realtime/client.js";
+import { connectWhatsapp, disconnectWhatsapp, handleResolvedWhatsappMessage } from "../whatsapp/index.js";
 
 const { App } = bolt;
 
@@ -27,7 +28,15 @@ export async function startSlackBot(): Promise<void> {
   registerMessageHandler(app, auth.user_id as string);
   registerTechAgentResponseHandler(app, auth.user_id as string);
 
-  const worker = startDebounceWorker(async (_source, slackUserId, channelId, texto) => {
+  // Un único worker de debounce para todos los canales (Slack + WhatsApp) — se rutea por
+  // `source` acá en vez de tener una cola separada por canal, mismo mecanismo que ya evita que
+  // se mezclen mensajes de un mismo usuario en dos canales distintos (ver
+  // messaging/debounce-queue.ts, bug del punto 16 de ESTADO-PROYECTO.md).
+  const worker = startDebounceWorker(async (source, slackUserId, channelId, texto) => {
+    if (source === "whatsapp") {
+      await handleResolvedWhatsappMessage(slackUserId, texto); // acá slackUserId === channelId === group_jid
+      return;
+    }
     await handleResolvedMessage(app.client, slackUserId, channelId, texto, (text) =>
       app.client.chat.postMessage({ channel: channelId, text }),
     );
@@ -41,6 +50,7 @@ export async function startSlackBot(): Promise<void> {
     await closeRedis();
     webhookServer.close();
     disconnectRealtime();
+    disconnectWhatsapp();
     await app.stop();
     process.exit(0);
   };
@@ -69,6 +79,9 @@ export async function startSlackBot(): Promise<void> {
   // No bloqueante a propósito: si RedTec todavía no confirmó URL/secreto, esto no hace nada
   // (ver client.ts) y el resto del arranque sigue igual.
   connectRealtime();
+  // Ídem para WhatsApp: sin WHATSAPP_EVOLUTION_URL/API_KEY configuradas, no hace nada (ver
+  // integrations/evolution-api/client.ts).
+  connectWhatsapp();
 
   await app.start();
   logger.info("⚡️ Daniel está corriendo (Slack Socket Mode)");

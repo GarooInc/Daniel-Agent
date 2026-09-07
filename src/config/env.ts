@@ -42,4 +42,19 @@ export const env = {
   // A.5 — timeout si el Agente Técnico no responde. Opcional a propósito (no en
   // REQUIRED_ENV_VARS): sin esto, agent/tech-agent-timeout.ts usa el default de 15 minutos.
   techAgentTimeoutMs: process.env.TECH_AGENT_TIMEOUT_MS ? Number(process.env.TECH_AGENT_TIMEOUT_MS) : undefined,
+  // Canal de WhatsApp (Evolution API self-hosted sobre Baileys, instancia compartida `RedtecBot`
+  // de RedTec) — ver plans/2026-09-06-canal-whatsapp-evolution-api.md. Opcionales a propósito
+  // (no en REQUIRED_ENV_VARS): sin esto, integrations/evolution-api/client.ts no intenta
+  // conectar y el resto del bot sigue igual.
+  whatsappEvolutionUrl: process.env.WHATSAPP_EVOLUTION_URL,
+  whatsappEvolutionApiKey: process.env.WHATSAPP_EVOLUTION_API_KEY,
+  whatsappEvolutionInstance: process.env.WHATSAPP_EVOLUTION_INSTANCE || "RedtecBot",
+  // JID propio del bot dentro de los grupos (equivalente al BOT_USER_ID de Slack). Candidato
+  // confirmado por GET /instance/fetchInstances (2026-09-06, real, contra la instancia
+  // RedtecBot): "13322311881@s.whatsapp.net" (su ownerJid) — falta confirmar que ese mismo
+  // valor es el que trae `contextInfo.mentionedJid` en un mensaje real que mencione al bot
+  // (solo se ve con tráfico real, no con un GET). Sin esto seteado, el canal escucha pero
+  // nunca responde (ver channels/whatsapp/message-handler.ts): mejor silencio que contestar de
+  // más sin poder confirmar una mención real.
+  whatsappBotJid: process.env.WHATSAPP_BOT_JID,
 };

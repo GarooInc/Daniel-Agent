@@ -42,3 +42,9 @@ GRANT SELECT ON daniel_heartbeat TO support_panel_reader;
 --     del request, incluido x-webhook-secret si el caller lo manda (valor real de
 --     WEBHOOK_SECRET). El panel solo va a mostrar route/received_at/parsed/body.
 GRANT SELECT ON chat_messages, webhook_raw_events TO support_panel_reader;
+
+-- Sección nueva "Agentes Técnicos" del panel (2026-09-06), solo lectura, coordinado con la
+-- sesión de Support-Agent-Panel y confirmado por Jorge directamente antes de correrlo (mismo
+-- protocolo que las líneas de arriba). Ruteo cliente->canal/bot del Agente Técnico + estado de
+-- los handoffs (pending/answered/timeout, causa_raiz, componente_afectado). Sin escritura.
+GRANT SELECT ON tech_agents, tech_agent_handoffs TO support_panel_reader;

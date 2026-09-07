@@ -156,4 +156,16 @@ CREATE TABLE IF NOT EXISTS daniel_heartbeat (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Ruteo grupo de WhatsApp -> cliente (canal nuevo, ver
+-- plans/2026-09-06-canal-whatsapp-evolution-api.md). Mismo espíritu que tech_agents: sumar o
+-- reasignar un grupo es un INSERT, no un deploy. Poblada a mano a propósito — no hay
+-- sincronización automática con ra_whatsapp_groups (vive en la base de otro sistema, RedTec;
+-- punto abierto #1 del plan, resuelto por decidir NO depender de esa tabla ajena).
+CREATE TABLE IF NOT EXISTS whatsapp_groups (
+  group_jid TEXT PRIMARY KEY,
+  empresa TEXT NOT NULL,
+  nombre_grupo TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
