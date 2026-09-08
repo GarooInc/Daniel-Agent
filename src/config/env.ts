@@ -49,12 +49,12 @@ export const env = {
   whatsappEvolutionUrl: process.env.WHATSAPP_EVOLUTION_URL,
   whatsappEvolutionApiKey: process.env.WHATSAPP_EVOLUTION_API_KEY,
   whatsappEvolutionInstance: process.env.WHATSAPP_EVOLUTION_INSTANCE || "RedtecBot",
-  // JID propio del bot dentro de los grupos (equivalente al BOT_USER_ID de Slack). Candidato
-  // confirmado por GET /instance/fetchInstances (2026-09-06, real, contra la instancia
-  // RedtecBot): "13322311881@s.whatsapp.net" (su ownerJid) — falta confirmar que ese mismo
-  // valor es el que trae `contextInfo.mentionedJid` en un mensaje real que mencione al bot
-  // (solo se ve con tráfico real, no con un GET). Sin esto seteado, el canal escucha pero
-  // nunca responde (ver channels/whatsapp/message-handler.ts): mejor silencio que contestar de
-  // más sin poder confirmar una mención real.
+  // JID propio del bot dentro de los grupos (equivalente al BOT_USER_ID de Slack). El ownerJid
+  // de formato teléfono ("13322311881@s.whatsapp.net", confirmado por fetchInstances el
+  // 2026-09-06) NO es el que aparece en `contextInfo.mentionedJid` — estos grupos usan modo
+  // `lid` (ver message-handler.ts), así que el valor real confirmado con tráfico en vivo el
+  // 2026-09-08 (mención real en el grupo "RedTec Dev") es "20951488028779@lid". Sin esto
+  // seteado, el canal escucha pero nunca responde: mejor silencio que contestar de más sin
+  // poder confirmar una mención real.
   whatsappBotJid: process.env.WHATSAPP_BOT_JID,
 };
