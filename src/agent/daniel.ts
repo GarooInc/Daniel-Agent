@@ -8,6 +8,7 @@ import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDra
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
 import { listTechAgents } from "../integrations/postgres/tech-agents.js";
+import { getClientWiki } from "../integrations/postgres/client-wiki.js";
 import { getAgentConfig, buildSystemPrompt } from "../integrations/postgres/agent-config.js";
 import { logger } from "../config/logger.js";
 
@@ -47,6 +48,15 @@ function buildKnownDataNote(effectiveDraft: TicketDraftFields): string {
   return `\n\nDatos ya conocidos de este cliente para un eventual ticket de soporte — NO se los vuelvas a pedir: ${knownEntries
     .map(([k, v]) => `${k}="${v}"`)
     .join(", ")}. ${status}`;
+}
+
+// Inyecta la página de conocimiento técnico del cliente (patrón LLM Wiki, ver
+// plans/2026-09-07-client-wiki.md) directo en el prompt cuando existe — mismo criterio de
+// confiabilidad que buildKnownDataNote: no depender de que el modelo decida por su cuenta
+// consultar algo, sino dárselo ya resuelto.
+function buildClientWikiNote(empresa: string, wikiContenido: string | undefined): string {
+  if (!wikiContenido) return "";
+  return `\n\nConocimiento técnico ya registrado sobre el sistema de ${empresa} (de diagnósticos previos del equipo técnico) — usalo para responder preguntas sobre su sistema sin tener que consultar de nuevo:\n${wikiContenido}`;
 }
 
 export async function askDaniel(
@@ -114,7 +124,10 @@ export async function askDaniel(
   // configurado, un perfil desconocido no puede resolver la ambigüedad y el ticket no dispara el
   // aviso al Técnico hasta identificar la empresa (aceptable mientras solo haya un cliente
   // soportado).
-  const techAgents = await listTechAgents();
+  const [techAgents, clientWiki] = await Promise.all([
+    listTechAgents(),
+    profile?.empresa ? getClientWiki(profile.empresa) : Promise.resolve(null),
+  ]);
   const techAgentConfig =
     techAgents.find((c) => profile?.empresa && c.empresa.toLowerCase() === profile.empresa.toLowerCase()) ??
     (!profile?.empresa && techAgents.length === 1 ? techAgents[0] : undefined);
@@ -133,7 +146,11 @@ export async function askDaniel(
   );
   const model = buildModel(Object.values(toolsByName));
   const messages: (SystemMessage | HumanMessage | AIMessage | ToolMessage)[] = [
-    new SystemMessage(buildSystemPrompt(agentConfig) + buildKnownDataNote(effectiveDraft)),
+    new SystemMessage(
+      buildSystemPrompt(agentConfig) +
+        buildKnownDataNote(effectiveDraft) +
+        (profile?.empresa ? buildClientWikiNote(profile.empresa, clientWiki?.contenido) : ""),
+    ),
     ...history.map((m) => (m.role === "human" ? new HumanMessage(m.content) : new AIMessage(m.content))),
     new HumanMessage(userMessage),
   ];
