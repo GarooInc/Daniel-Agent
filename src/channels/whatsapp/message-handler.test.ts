@@ -14,7 +14,6 @@ function fakeSocket() {
   return {
     socket: {
       on: (event: string, fn: (payload: unknown) => void) => (handlers[event] = fn),
-      onAny: () => {}, // solo diagnóstico (modo global, ver message-handler.ts) — no afecta la lógica bajo test
     } as any,
     emit: (event: string, payload: unknown) => handlers[event]?.(payload),
   };
@@ -22,17 +21,15 @@ function fakeSocket() {
 
 function upsert(overrides: Partial<{ remoteJid: string; fromMe: boolean; mentionedJid: string[]; text: string }>) {
   return {
-    messages: [
-      {
-        key: { remoteJid: overrides.remoteJid ?? "120363000@g.us", fromMe: overrides.fromMe ?? false },
-        message: {
-          extendedTextMessage: {
-            text: overrides.text ?? "@Daniel hola, necesito ayuda",
-            contextInfo: { mentionedJid: overrides.mentionedJid ?? ["521555000@lid"] },
-          },
-        },
+    event: "messages.upsert",
+    instance: "RedtecBot",
+    data: {
+      key: { remoteJid: overrides.remoteJid ?? "120363000@g.us", fromMe: overrides.fromMe ?? false },
+      message: {
+        extendedTextMessage: { text: overrides.text ?? "@Daniel hola, necesito ayuda" },
       },
-    ],
+      contextInfo: { mentionedJid: overrides.mentionedJid ?? ["521555000@lid"] },
+    },
   };
 }
 
@@ -46,7 +43,7 @@ describe("registerMessageHandler (WhatsApp)", () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("MESSAGES_UPSERT", upsert({}));
+    emit("messages.upsert", upsert({}));
     await vi.waitFor(() => expect(bufferMessage).toHaveBeenCalled());
 
     expect(bufferMessage).toHaveBeenCalledWith("whatsapp", "120363000@g.us", "120363000@g.us", "@Daniel hola, necesito ayuda");
@@ -56,7 +53,7 @@ describe("registerMessageHandler (WhatsApp)", () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("MESSAGES_UPSERT", upsert({ mentionedJid: [] }));
+    emit("messages.upsert", upsert({ mentionedJid: [] }));
     await new Promise((r) => setTimeout(r, 0));
 
     expect(bufferMessage).not.toHaveBeenCalled();
@@ -66,7 +63,7 @@ describe("registerMessageHandler (WhatsApp)", () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("MESSAGES_UPSERT", upsert({ fromMe: true }));
+    emit("messages.upsert", upsert({ fromMe: true }));
     await new Promise((r) => setTimeout(r, 0));
 
     expect(bufferMessage).not.toHaveBeenCalled();
@@ -76,7 +73,7 @@ describe("registerMessageHandler (WhatsApp)", () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("MESSAGES_UPSERT", upsert({ remoteJid: "521555999@s.whatsapp.net" }));
+    emit("messages.upsert", upsert({ remoteJid: "521555999@s.whatsapp.net" }));
     await new Promise((r) => setTimeout(r, 0));
 
     expect(bufferMessage).not.toHaveBeenCalled();
@@ -87,7 +84,7 @@ describe("registerMessageHandler (WhatsApp)", () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("MESSAGES_UPSERT", upsert({}));
+    emit("messages.upsert", upsert({}));
     await vi.waitFor(() => expect(findEmpresaByGroupJid).toHaveBeenCalled());
 
     expect(bufferMessage).not.toHaveBeenCalled();

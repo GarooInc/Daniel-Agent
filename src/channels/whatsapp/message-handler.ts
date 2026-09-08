@@ -7,18 +7,26 @@ import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
 
-// Shape de Baileys/Evolution API para el evento `MESSAGES_UPSERT` — solo los campos que
-// usamos, el resto del payload (push name, timestamps, etc.) se ignora a propósito.
+// Shape confirmado por Fernando 2026-09-08 (dump real de api-mainrealstate, mismo servidor
+// Evolution API): `contextInfo` es hermano de `message`, no anidado dentro de
+// `extendedTextMessage` como se asumía antes. En modo `lid`, el teléfono real del que escribe
+// viene en `participantAlt`, no en `participant` — no lo usamos todavía pero queda documentado
+// acá para el próximo campo que necesite identificar a la persona (no solo al grupo).
 interface WhatsAppMessage {
-  key: { remoteJid?: string; fromMe?: boolean };
+  key: { remoteJid?: string; fromMe?: boolean; participant?: string; participantAlt?: string };
   message?: {
     conversation?: string;
-    extendedTextMessage?: { text?: string; contextInfo?: { mentionedJid?: string[] } };
+    extendedTextMessage?: { text?: string };
   };
+  contextInfo?: { mentionedJid?: string[] };
 }
 
-interface MessagesUpsertPayload {
-  messages: WhatsAppMessage[];
+// Envelope real del evento (confirmado 2026-09-08): un mensaje por evento, no un array — no
+// `{ messages: [...] }` como se asumía antes de tener un ejemplo real.
+interface MessagesUpsertEnvelope {
+  event: string;
+  instance: string;
+  data: WhatsAppMessage;
 }
 
 function extractText(msg: WhatsAppMessage): string | undefined {
@@ -30,52 +38,40 @@ function extractText(msg: WhatsAppMessage): string | undefined {
 // criterio que un grupo sin mapear: mejor no responder nunca a que responda de más.
 function isMentioned(msg: WhatsAppMessage): boolean {
   if (!env.whatsappBotJid) return false;
-  const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [];
+  const mentioned = msg.contextInfo?.mentionedJid ?? [];
   return mentioned.includes(env.whatsappBotJid);
 }
 
 export function registerMessageHandler(socket: Socket): void {
-  // TEMPORAL (2026-09-07): esta instalación de Evolution API está en modo "global" (confirmado
-  // por Fernando en vivo) — todavía no sabemos el nombre exacto del evento ni la forma del
-  // payload en ese modo (el namespace por instancia SÍ traía "MESSAGES_UPSERT" tal cual, pero
-  // en modo global puede diferir). Loguea CUALQUIER evento tal cual llega para confirmarlo con
-  // datos reales en vez de adivinar una tercera vez — sacar este bloque en cuanto se confirme
-  // (ver plans/2026-09-06-canal-whatsapp-evolution-api.md).
-  socket.onAny((eventName, payload) => {
-    logger.info({ eventName, payload }, "Evento crudo de WhatsApp recibido (diagnóstico modo global)");
-  });
+  // Nombre de evento y shape del payload confirmados por Fernando 2026-09-08 con un dump real
+  // de api-mainrealstate (mismo servidor Evolution API, mismo cliente Socket.IO): el evento es
+  // "messages.upsert" (minúsculas, punto — la convención interna de Baileys, no "MESSAGES_UPSERT"
+  // como se había confirmado antes vía fetchInstances contra el namespace por instancia).
+  socket.on("messages.upsert", (payload: MessagesUpsertEnvelope) => {
+    const msg = payload.data;
+    if (!msg || msg.key.fromMe) return;
 
-  // Nombre del evento confirmado contra la config real de la instancia (GET
-  // /instance/fetchInstances, 2026-09-06): "MESSAGES_UPSERT" (mayúsculas, guión bajo) — no
-  // "messages.upsert" (esa es la convención interna de Baileys, no la que Evolution API expone
-  // sobre Socket.IO). Se mantiene por si el modo global usa el mismo nombre, ver el bloque
-  // onAny() de arriba para confirmarlo si no.
-  socket.on("MESSAGES_UPSERT", (payload: MessagesUpsertPayload) => {
-    for (const msg of payload.messages ?? []) {
-      if (msg.key.fromMe) continue;
+    const groupJid = msg.key.remoteJid;
+    if (!groupJid || !groupJid.endsWith("@g.us")) return; // solo grupos, no DMs 1:1
 
-      const groupJid = msg.key.remoteJid;
-      if (!groupJid || !groupJid.endsWith("@g.us")) continue; // solo grupos, no DMs 1:1
+    const mencionado = isMentioned(msg);
+    // A nivel info (no debug) a propósito: sin esto, si WHATSAPP_BOT_JID está mal (punto
+    // abierto #4 del plan) un mensaje que sí mencionaba a Daniel se ignora en silencio y no
+    // queda ningún rastro de por qué — mismo espíritu que el logging de scores de
+    // search-faqs.ts. No loguea el texto del mensaje, solo metadata de mención.
+    logger.info(
+      { groupJid, mentionedJid: msg.contextInfo?.mentionedJid ?? [], mencionado },
+      "Mensaje de grupo de WhatsApp recibido",
+    );
 
-      const mencionado = isMentioned(msg);
-      // A nivel info (no debug) a propósito: sin esto, si WHATSAPP_BOT_JID está mal (punto
-      // abierto #4 del plan) un mensaje que sí mencionaba a Daniel se ignora en silencio y no
-      // queda ningún rastro de por qué — mismo espíritu que el logging de scores de
-      // search-faqs.ts. No loguea el texto del mensaje, solo metadata de mención.
-      logger.info(
-        { groupJid, mentionedJid: msg.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [], mencionado },
-        "Mensaje de grupo de WhatsApp recibido",
-      );
+    if (!mencionado) return;
 
-      if (!mencionado) continue;
+    const texto = extractText(msg);
+    if (!texto) return;
 
-      const texto = extractText(msg);
-      if (!texto) continue;
-
-      handleGroupMessage(groupJid, texto).catch((err) => {
-        logger.error({ err, groupJid }, "Error al procesar un mensaje entrante de WhatsApp");
-      });
-    }
+    handleGroupMessage(groupJid, texto).catch((err) => {
+      logger.error({ err, groupJid }, "Error al procesar un mensaje entrante de WhatsApp");
+    });
   });
 }
 

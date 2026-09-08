@@ -18,15 +18,14 @@ export function connectEvolutionSocket(): Socket | undefined {
     return undefined;
   }
 
-  // Conexión al namespace RAÍZ, no a `{url}/{instance}` — confirmado por Fernando en vivo
-  // (2026-09-07): esta instalación de Evolution API está en modo "global" (todos los eventos de
-  // todas las instancias del servidor llegan acá, no uno por instancia), así que hay que
-  // filtrar por un campo `instance` dentro de cada evento (ver message-handler.ts) en vez de
-  // depender del namespace para aislar solo los eventos de RedtecBot. La key va en la query
-  // string (no en `auth`, que probado en vivo daba 403 "apiKey is required" — Evolution API la
-  // valida en el handshake HTTP mismo, antes de que Socket.IO procese el auth interno).
-  socket = io(env.whatsappEvolutionUrl, {
-    query: { apikey: env.whatsappEvolutionApiKey },
+  // Namespace por instancia (`{url}/{instance}`, no la raíz) y API key por header HTTP del
+  // handshake WS (`extraHeaders`, no query ni `auth`) — confirmado por Fernando 2026-09-08 con
+  // el cliente real de api-mainrealstate, que es el mismo patrón (Socket.IO puro, no un
+  // WebSocket nativo como se sospechaba antes). `transports: ["websocket"]` fuerza el upgrade
+  // directo sin el polling HTTP inicial de Engine.IO, igual que api-mainrealstate.
+  socket = io(`${env.whatsappEvolutionUrl}/${env.whatsappEvolutionInstance}`, {
+    transports: ["websocket"],
+    extraHeaders: { apikey: env.whatsappEvolutionApiKey },
   });
 
   socket.on("connect", () => logger.info("WhatsApp (Evolution API) conectado"));
