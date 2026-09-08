@@ -24,6 +24,19 @@ export async function saveTicketConversation(mondayItemId: string, slackUserId: 
   );
 }
 
+// Para tools/modify-ticket.ts: cuando el cliente pide un cambio sobre "mi ticket" sin dar el
+// número, se asume que se refiere al último que escaló en esta misma conversación (slackUserId
+// funciona igual para Slack y para WhatsApp — ver channels/whatsapp/message-handler.ts, que
+// pasa el groupJid como slackUserId).
+export async function findLatestTicketBySlackUser(slackUserId: string): Promise<string | null> {
+  const pool = await getPool();
+  const result = await pool.query<{ monday_item_id: string }>(
+    `SELECT monday_item_id FROM ticket_conversations WHERE slack_user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [slackUserId],
+  );
+  return result.rows[0]?.monday_item_id ?? null;
+}
+
 export async function findTicketConversation(mondayItemId: string): Promise<TicketConversationDoc | null> {
   const pool = await getPool();
   const result = await pool.query<{ monday_item_id: string; slack_user_id: string; channel_id: string; created_at: Date }>(

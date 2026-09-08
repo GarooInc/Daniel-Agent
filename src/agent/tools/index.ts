@@ -3,6 +3,7 @@ import { searchFaqsTool } from "./search-faqs.js";
 import { lookupCustomerTool } from "./lookup-customer.js";
 import { platformHealthTool } from "./platform-health.js";
 import { createEscalateToMondayTool } from "./escalate-to-monday.js";
+import { createModifyTicketTool } from "./modify-ticket.js";
 import type { TicketDraftFields } from "../../integrations/postgres/ticket-draft.js";
 import type { TechAgentConfig } from "../../config/tech-agents.js";
 
@@ -29,6 +30,7 @@ export function buildToolsByName(
     lookupCustomerTool,
     platformHealthTool,
     createEscalateToMondayTool(slackUserId, effectiveDraft, channelId, client, techAgentConfig, onTicketCreated),
+    createModifyTicketTool(slackUserId),
   ];
   const enabled = enabledToolNames ? tools.filter((t) => enabledToolNames.includes(t.name)) : tools;
   return Object.fromEntries(enabled.map((t) => [t.name, t]));

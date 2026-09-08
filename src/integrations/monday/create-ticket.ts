@@ -63,7 +63,9 @@ const CATEGORIA_BY_TIPO_SOLICITUD: Record<TipoSolicitudTicket, string> = {
 // urgencia (No es urgente/Urgente) no tiene columna homóloga — se mapea a Prioridad (P1-P4)
 // del tablero nuevo. Decisión 2026-08-26: deja P1 Crítico y P4 Bajo libres para que el equipo
 // humano los ajuste manualmente, porque Daniel no distingue esos extremos hoy.
-const PRIORIDAD_BY_URGENCIA: Record<UrgenciaTicket, string> = {
+// Exportado para tools/modify-ticket.ts: mismo mapeo para cambiar la prioridad de un ticket
+// ya creado, no solo al crearlo.
+export const PRIORIDAD_BY_URGENCIA: Record<UrgenciaTicket, string> = {
   Urgente: "P2 Alto",
   "No es urgente": "P3 Medio",
 };

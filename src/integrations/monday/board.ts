@@ -13,3 +13,8 @@ export const SUPPORT_BOARD_COLUMNS = {
   // No existe un "Listo" propio — ver ticket-updates.ts, markTicketReady ahora mapea a "Done".
   estado: "status",
 } as const;
+
+// Labels reales de la columna "estado" del tablero nuevo — ver tools/modify-ticket.ts
+// (Daniel puede cambiar el estado de un ticket ya escalado si el cliente lo pide).
+export const ESTADO_VALUES = ["Working on it", "Done", "Stuck", "Testing"] as const;
+export type EstadoTicket = (typeof ESTADO_VALUES)[number];

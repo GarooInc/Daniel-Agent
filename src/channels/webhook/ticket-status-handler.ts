@@ -1,5 +1,6 @@
 import { findTicketConversation } from "../../integrations/postgres/ticket-conversations.js";
 import { notifyTicketStatusChange } from "../../integrations/slack/notify-ticket-status.js";
+import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
 import { logger } from "../../config/logger.js";
 
 type TicketStatusChangedPayload = {
@@ -31,6 +32,17 @@ export async function handleTicketStatusChanged(body: unknown): Promise<void> {
     // Puede pasar con tickets creados antes de que existiera ticket_conversations, o con
     // tickets que no pasaron por Daniel — no es un error, solo no hay a quién avisarle.
     logger.warn({ mondayItemId }, "ticket.status_changed sin conversación correlacionada — no se avisa a nadie");
+    return;
+  }
+
+  // Punto 30 de ESTADO-PROYECTO.md (pedido de Fernando 2026-09-08): "notificar en los grupos de
+  // los clientes que pueda identificar". Cuando el ticket se escaló desde un grupo de WhatsApp,
+  // ticket_conversations.channelId ya guarda ese groupJid (askDaniel recibe el mismo JID como
+  // slackUserId y channelId, ver channels/whatsapp/message-handler.ts) — se distingue de un
+  // canal de Slack por el sufijo "@g.us" de Baileys, no hace falta una columna nueva.
+  if (conversation.channelId.endsWith("@g.us")) {
+    const detalle = body.title ? ` (${body.title})` : "";
+    await sendGroupMessage(conversation.channelId, `📋 Tu ticket #${mondayItemId}${detalle} cambió de estado: ${body.status}`);
     return;
   }
 
