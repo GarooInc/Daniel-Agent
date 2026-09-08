@@ -1,9 +1,8 @@
 import { env } from "../../config/env.js";
 
-// Contrato NO confirmado explícitamente por Fernando (punto abierto #3 del plan) — hipótesis
-// documentada en ESTADO-PROYECTO.md punto 24, patrón estándar de Evolution API:
-// POST /message/sendText/{instance} con { number, text }. Probar con un curl de prueba contra
-// un grupo de prueba antes de confiar en esto para responder a un cliente real.
+// Contrato confirmado por Fernando (2026-09-08): el envío va por REST, no por el socket —
+// POST /message/sendText/{instance} con { number, text }, `number` es el JID (@g.us para
+// grupos, @s.whatsapp.net o dígitos para DM).
 export async function sendGroupMessage(groupJid: string, text: string): Promise<void> {
   if (!env.whatsappEvolutionUrl || !env.whatsappEvolutionApiKey) {
     throw new Error("sendGroupMessage llamado sin WHATSAPP_EVOLUTION_URL/WHATSAPP_EVOLUTION_API_KEY configurados");
