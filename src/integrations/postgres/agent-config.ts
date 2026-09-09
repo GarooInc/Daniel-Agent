@@ -1,4 +1,5 @@
 import { getPool } from "./client.js";
+import { env } from "../../config/env.js";
 import { SYSTEM_PROMPT as DEFAULT_SYSTEM_PROMPT } from "../../agent/prompt.js";
 
 // Config de Daniel editable en vivo desde Support-Agent-Panel — ver schema.ts para la tabla.
@@ -8,6 +9,8 @@ export interface AgentConfig {
   systemPrompt: string;
   businessRules: string[];
   connectedTools: string[] | null;
+  whatsappInternalGroupJid: string;
+  slackEscalationChannel: string;
   updatedAt: Date;
   updatedBy: string | null;
 }
@@ -31,17 +34,24 @@ async function loadAgentConfig(): Promise<AgentConfig> {
     system_prompt: string | null;
     business_rules: string[] | null;
     connected_tools: string[] | null;
+    whatsapp_internal_group_jid: string | null;
+    slack_escalation_channel: string | null;
     updated_at: Date;
     updated_by: string | null;
-  }>("SELECT system_prompt, business_rules, connected_tools, updated_at, updated_by FROM daniel_agent_config WHERE id = 1");
+  }>(
+    "SELECT system_prompt, business_rules, connected_tools, whatsapp_internal_group_jid, slack_escalation_channel, updated_at, updated_by FROM daniel_agent_config WHERE id = 1",
+  );
 
   const row = rows[0];
   const config: AgentConfig = {
     // Fila ausente o system_prompt en blanco => el prompt de código es el default real, no un
-    // string vacío corriendo en producción.
+    // string vacío corriendo en producción. Mismo criterio para las 2 columnas nuevas de abajo:
+    // caen al env var si la fila no existe o vienen en blanco (ver env.ts).
     systemPrompt: row?.system_prompt || DEFAULT_SYSTEM_PROMPT,
     businessRules: row?.business_rules ?? [],
     connectedTools: row?.connected_tools ?? null,
+    whatsappInternalGroupJid: row?.whatsapp_internal_group_jid || env.whatsappInternalGroupJid,
+    slackEscalationChannel: row?.slack_escalation_channel || env.slackEscalationChannel,
     updatedAt: row?.updated_at ?? new Date(0),
     updatedBy: row?.updated_by ?? null,
   };

@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const bufferMessage = vi.fn().mockResolvedValue(undefined);
 const INTERNAL_GROUP_JID = "120363392107150448@g.us";
+const getAgentConfig = vi.fn().mockResolvedValue({ whatsappInternalGroupJid: INTERNAL_GROUP_JID });
 
 vi.mock("../../messaging/debounce-queue.js", () => ({ bufferMessage }));
+vi.mock("../../integrations/postgres/agent-config.js", () => ({ getAgentConfig }));
 vi.mock("../../config/env.js", () => ({
-  env: { whatsappBotJid: "521555000@lid", whatsappInternalGroupJid: INTERNAL_GROUP_JID },
+  env: { whatsappBotJid: "521555000@lid" },
 }));
 
 const { registerMessageHandler } = await import("./message-handler.js");

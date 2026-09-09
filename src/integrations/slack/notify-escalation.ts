@@ -1,6 +1,7 @@
 import { WebClient } from "@slack/web-api";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
+import { getAgentConfig } from "../postgres/agent-config.js";
 
 const client = new WebClient(env.slackBotToken);
 
@@ -12,13 +13,19 @@ export function escapeMrkdwn(text: string): string {
 }
 
 let cachedChannelId: string | undefined;
+// El nombre de canal (env.slackEscalationChannel antes, ahora editable desde el panel vía
+// daniel_agent_config) queda pegado acá junto al ID resuelto — si el valor configurado cambia,
+// el cache de abajo lo detecta y re-resuelve en vez de seguir apuntando al canal viejo para
+// siempre.
+let cachedChannelName: string | undefined;
 
 export function _resetCachedChannelIdForTests(): void {
   cachedChannelId = undefined;
+  cachedChannelName = undefined;
 }
 
-async function resolveChannelId(): Promise<string | undefined> {
-  if (cachedChannelId) return cachedChannelId;
+async function resolveChannelId(channelName: string): Promise<string | undefined> {
+  if (cachedChannelId && cachedChannelName === channelName) return cachedChannelId;
 
   let cursor: string | undefined;
   do {
@@ -28,9 +35,10 @@ async function resolveChannelId(): Promise<string | undefined> {
       cursor,
     });
 
-    const match = result.channels?.find((c) => c.name === env.slackEscalationChannel);
+    const match = result.channels?.find((c) => c.name === channelName);
     if (match?.id) {
       cachedChannelId = match.id;
+      cachedChannelName = channelName;
       return cachedChannelId;
     }
 
@@ -53,10 +61,11 @@ export type EscalationNotice = {
 };
 
 export async function notifyEscalation(notice: EscalationNotice): Promise<void> {
-  const channelId = await resolveChannelId();
+  const config = await getAgentConfig();
+  const channelId = await resolveChannelId(config.slackEscalationChannel);
   if (!channelId) {
     logger.warn(
-      { channel: env.slackEscalationChannel },
+      { channel: config.slackEscalationChannel },
       "No se encontró el canal de escalación en Slack (¿Daniel fue invitado al canal?)",
     );
     return;

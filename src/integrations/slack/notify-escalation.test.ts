@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { conversationsListMock, postMessageMock } = vi.hoisted(() => ({
+const { conversationsListMock, postMessageMock, getAgentConfig } = vi.hoisted(() => ({
   conversationsListMock: vi.fn().mockResolvedValue({ channels: [{ id: "C12345678", name: "escalacion" }] }),
   postMessageMock: vi.fn().mockResolvedValue({ ok: true }),
+  getAgentConfig: vi.fn().mockResolvedValue({ slackEscalationChannel: "escalacion" }),
 }));
 
 vi.mock("@slack/web-api", () => {
@@ -15,6 +16,7 @@ vi.mock("@slack/web-api", () => {
     }),
   };
 });
+vi.mock("../postgres/agent-config.js", () => ({ getAgentConfig }));
 
 import { _resetCachedChannelIdForTests, escapeMrkdwn, notifyEscalation } from "./notify-escalation.js";
 

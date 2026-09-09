@@ -138,14 +138,25 @@ CREATE TABLE IF NOT EXISTS tech_agents (
 -- ahora, se suma si hace falta. El panel escribe acá con un rol de Postgres propio, acotado
 -- a SELECT/UPDATE solo sobre esta tabla (ver sql/grant-panel-role.sql, no se commitea con
 -- credenciales). Ver integrations/postgres/agent-config.ts para el lado que lee esto.
+-- whatsapp_internal_group_jid/slack_escalation_channel (2026-09-09): mismo mecanismo que
+-- system_prompt — NULL/vacío cae al env var (WHATSAPP_INTERNAL_GROUP_JID/SLACK_ESCALATION_CHANNEL)
+-- como default, así que el deploy de este cambio no depende de sembrar la fila primero. Ver
+-- integrations/postgres/agent-config.ts.
 CREATE TABLE IF NOT EXISTS daniel_agent_config (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   system_prompt TEXT,
   business_rules JSONB NOT NULL DEFAULT '[]',
   connected_tools JSONB,
+  whatsapp_internal_group_jid TEXT,
+  slack_escalation_channel TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by TEXT
 );
+-- La tabla ya existe en producción desde el 2026-08-27 (CREATE TABLE IF NOT EXISTS de arriba es
+-- un no-op ahí) — hace falta ALTER explícito para que las 2 columnas nuevas aparezcan sin
+-- borrar/recrear la fila real que ya tiene el panel.
+ALTER TABLE daniel_agent_config ADD COLUMN IF NOT EXISTS whatsapp_internal_group_jid TEXT;
+ALTER TABLE daniel_agent_config ADD COLUMN IF NOT EXISTS slack_escalation_channel TEXT;
 
 -- Heartbeat de proceso para el indicador "Daniel en línea" de Support-Agent-Panel (Topbar).
 -- Fila única (id fijo en 1), actualizada cada ~20-30s por integrations/postgres/heartbeat.ts

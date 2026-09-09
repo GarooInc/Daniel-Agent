@@ -1,6 +1,7 @@
 import type { Socket } from "socket.io-client";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
+import { getAgentConfig } from "../../integrations/postgres/agent-config.js";
 import { bufferMessage } from "../../messaging/debounce-queue.js";
 import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
@@ -65,13 +66,6 @@ export function registerMessageHandler(socket: Socket): void {
 
     if (!mencionado) return;
 
-    // Pedido de Fernando 2026-09-09: Daniel solo escucha/responde en el grupo interno "RedTec
-    // Dev" — en cualquier otro grupo (clientes reales) nunca contesta, ni aunque lo mencionen.
-    // Esos grupos solo reciben avisos salientes de cambio de estado de ticket (ver
-    // ticket-status-handler.ts), no son una vía de entrada. `whatsapp_groups`/`empresa` ya no
-    // gatea si Daniel responde acá — queda solo para el ruteo de esos avisos salientes.
-    if (groupJid !== env.whatsappInternalGroupJid) return;
-
     const texto = extractText(msg);
     if (!texto) return;
 
@@ -81,7 +75,18 @@ export function registerMessageHandler(socket: Socket): void {
   });
 }
 
+// Pedido de Fernando 2026-09-09: Daniel solo escucha/responde en el grupo interno "RedTec Dev"
+// — en cualquier otro grupo (clientes reales) nunca contesta, ni aunque lo mencionen. Esos
+// grupos solo reciben avisos salientes de cambio de estado de ticket (ver
+// ticket-status-handler.ts), no son una vía de entrada. `whatsapp_groups`/`empresa` ya no gatea
+// si Daniel responde acá — queda solo para el ruteo de esos avisos salientes. El JID del grupo
+// interno vive en daniel_agent_config (editable desde Support-Agent-Panel, ver
+// integrations/postgres/agent-config.ts), no en env.whatsappInternalGroupJid directo — por eso
+// el chequeo se movió acá adentro (async) en vez de quedar sync en el callback de arriba.
 async function handleGroupMessage(groupJid: string, texto: string): Promise<void> {
+  const config = await getAgentConfig();
+  if (groupJid !== config.whatsappInternalGroupJid) return;
+
   await bufferMessage("whatsapp", groupJid, groupJid, texto);
 }
 
