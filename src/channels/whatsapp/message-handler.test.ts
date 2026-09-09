@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const bufferMessage = vi.fn().mockResolvedValue(undefined);
-const findEmpresaByGroupJid = vi.fn();
+const INTERNAL_GROUP_JID = "120363392107150448@g.us";
 
 vi.mock("../../messaging/debounce-queue.js", () => ({ bufferMessage }));
-vi.mock("../../integrations/postgres/whatsapp-groups.js", () => ({ findEmpresaByGroupJid }));
-vi.mock("../../config/env.js", () => ({ env: { whatsappBotJid: "521555000@lid" } }));
+vi.mock("../../config/env.js", () => ({
+  env: { whatsappBotJid: "521555000@lid", whatsappInternalGroupJid: INTERNAL_GROUP_JID },
+}));
 
 const { registerMessageHandler } = await import("./message-handler.js");
 
@@ -24,7 +25,7 @@ function upsert(overrides: Partial<{ remoteJid: string; fromMe: boolean; mention
     event: "messages.upsert",
     instance: "RedtecBot",
     data: {
-      key: { remoteJid: overrides.remoteJid ?? "120363000@g.us", fromMe: overrides.fromMe ?? false },
+      key: { remoteJid: overrides.remoteJid ?? INTERNAL_GROUP_JID, fromMe: overrides.fromMe ?? false },
       message: {
         extendedTextMessage: { text: overrides.text ?? "@Daniel hola, necesito ayuda" },
       },
@@ -36,17 +37,16 @@ function upsert(overrides: Partial<{ remoteJid: string; fromMe: boolean; mention
 describe("registerMessageHandler (WhatsApp)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    findEmpresaByGroupJid.mockResolvedValue("Spectrum");
   });
 
-  it("bufferiza un mensaje de un grupo mapeado que menciona a Daniel", async () => {
+  it("bufferiza un mensaje del grupo interno que menciona a Daniel", async () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
     emit("messages.upsert", upsert({}));
     await vi.waitFor(() => expect(bufferMessage).toHaveBeenCalled());
 
-    expect(bufferMessage).toHaveBeenCalledWith("whatsapp", "120363000@g.us", "120363000@g.us", "@Daniel hola, necesito ayuda");
+    expect(bufferMessage).toHaveBeenCalledWith("whatsapp", INTERNAL_GROUP_JID, INTERNAL_GROUP_JID, "@Daniel hola, necesito ayuda");
   });
 
   it("ignora un mensaje que no menciona a Daniel", async () => {
@@ -79,13 +79,12 @@ describe("registerMessageHandler (WhatsApp)", () => {
     expect(bufferMessage).not.toHaveBeenCalled();
   });
 
-  it("ignora un grupo mencionado pero sin mapear a ningún cliente en whatsapp_groups", async () => {
-    findEmpresaByGroupJid.mockResolvedValue(undefined);
+  it("ignora una mención en un grupo de cliente que no es el grupo interno", async () => {
     const { socket, emit } = fakeSocket();
     registerMessageHandler(socket);
 
-    emit("messages.upsert", upsert({}));
-    await vi.waitFor(() => expect(findEmpresaByGroupJid).toHaveBeenCalled());
+    emit("messages.upsert", upsert({ remoteJid: "120363000@g.us" }));
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(bufferMessage).not.toHaveBeenCalled();
   });

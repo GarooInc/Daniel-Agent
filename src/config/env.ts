@@ -57,4 +57,10 @@ export const env = {
   // seteado, el canal escucha pero nunca responde: mejor silencio que contestar de más sin
   // poder confirmar una mención real.
   whatsappBotJid: process.env.WHATSAPP_BOT_JID,
+  // Pedido de Fernando 2026-09-09: Daniel solo escucha/responde menciones en el grupo interno
+  // "RedTec Dev" — en cualquier otro grupo (clientes reales) nunca responde, aunque lo mencionen,
+  // solo recibe avisos salientes de cambio de estado de ticket. Default al JID ya confirmado en
+  // vivo (mismo criterio que whatsappEvolutionInstance: valor estable, no hace falta cargarlo a
+  // mano en cada deploy), overrideable si el grupo de prueba cambia.
+  whatsappInternalGroupJid: process.env.WHATSAPP_INTERNAL_GROUP_JID || "120363392107150448@g.us",
 };

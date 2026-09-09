@@ -2,7 +2,6 @@ import type { Socket } from "socket.io-client";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { bufferMessage } from "../../messaging/debounce-queue.js";
-import { findEmpresaByGroupJid } from "../../integrations/postgres/whatsapp-groups.js";
 import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
@@ -66,6 +65,13 @@ export function registerMessageHandler(socket: Socket): void {
 
     if (!mencionado) return;
 
+    // Pedido de Fernando 2026-09-09: Daniel solo escucha/responde en el grupo interno "RedTec
+    // Dev" — en cualquier otro grupo (clientes reales) nunca contesta, ni aunque lo mencionen.
+    // Esos grupos solo reciben avisos salientes de cambio de estado de ticket (ver
+    // ticket-status-handler.ts), no son una vía de entrada. `whatsapp_groups`/`empresa` ya no
+    // gatea si Daniel responde acá — queda solo para el ruteo de esos avisos salientes.
+    if (groupJid !== env.whatsappInternalGroupJid) return;
+
     const texto = extractText(msg);
     if (!texto) return;
 
@@ -76,14 +82,6 @@ export function registerMessageHandler(socket: Socket): void {
 }
 
 async function handleGroupMessage(groupJid: string, texto: string): Promise<void> {
-  const empresa = await findEmpresaByGroupJid(groupJid);
-  if (!empresa) {
-    // Mismo espíritu que "nunca prometerle al cliente algo que no se hizo": mejor silencio
-    // que contestarle a un grupo interno de RedTec o a un cliente sin clasificar todavía.
-    logger.warn({ groupJid }, "Grupo de WhatsApp sin mapear a ningún cliente en whatsapp_groups, se ignora");
-    return;
-  }
-
   await bufferMessage("whatsapp", groupJid, groupJid, texto);
 }
 

@@ -1,5 +1,9 @@
 import { findTicketConversation } from "../../integrations/postgres/ticket-conversations.js";
 import { notifyTicketStatusChange } from "../../integrations/slack/notify-ticket-status.js";
+import { findEmpresaByMondayCliente } from "../../integrations/postgres/monday-clientes.js";
+import { findGroupJidByEmpresa } from "../../integrations/postgres/whatsapp-groups.js";
+import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
+import { getItemColumnValue } from "../../integrations/monday/get-item.js";
 import { SUPPORT_BOARD_COLUMNS, SUPPORT_BOARD_ID } from "../../integrations/monday/board.js";
 import { logger } from "../../config/logger.js";
 
@@ -46,15 +50,31 @@ export async function handleMondayNativeEvent(body: unknown): Promise<void> {
 
   const mondayItemId = String(pulseId);
   const conversation = await findTicketConversation(mondayItemId);
-  if (!conversation) {
-    logger.warn({ mondayItemId }, "Evento nativo de Monday sin conversación correlacionada — no se avisa a nadie");
+  if (conversation) {
+    await notifyTicketStatusChange({
+      channelId: conversation.channelId,
+      ticketId: mondayItemId,
+      title: pulseName,
+      status,
+    });
     return;
   }
 
-  await notifyTicketStatusChange({
-    channelId: conversation.channelId,
-    ticketId: mondayItemId,
-    title: pulseName,
-    status,
-  });
+  // Sin conversación correlacionada: es un ticket que Daniel no creó (lo creó el agente propio
+  // de un cliente, directo en este mismo tablero — ver ESTADO-PROYECTO.md punto 30). Antes esto
+  // se descartaba en silencio sin avisarle a nadie (bug real, encontrado 2026-09-09 con dos
+  // tickets reales de RNR/Rosero Construye que nunca notificaron). Único dato de cliente
+  // disponible es la columna "Cliente" del tablero, que ni el evento del webhook trae (hay que
+  // pedirla aparte) ni está garantizado que venga poblada.
+  const clienteColumna = await getItemColumnValue(mondayItemId, SUPPORT_BOARD_COLUMNS.cliente);
+  const empresa = clienteColumna ? await findEmpresaByMondayCliente(clienteColumna) : undefined;
+  const groupJid = empresa ? await findGroupJidByEmpresa(empresa) : undefined;
+
+  if (!groupJid) {
+    logger.warn({ mondayItemId, clienteColumna, empresa }, "Ticket sin conversación correlacionada ni grupo de WhatsApp resoluble — no se avisa a nadie");
+    return;
+  }
+
+  const detalle = pulseName ? ` (${pulseName})` : "";
+  await sendGroupMessage(groupJid, `📋 Tu ticket #${mondayItemId}${detalle} cambió de estado: ${status}`);
 }

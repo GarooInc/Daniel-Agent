@@ -5,6 +5,9 @@ export const SUPPORT_BOARD_ID = 5092085472;
 
 export const SUPPORT_BOARD_COLUMNS = {
   contacto: "text_mm5sq8cs",
+  // Poblada por el agente de cada cliente al crear su propio ticket, no por Daniel — y no
+  // siempre (ver monday-webhook-handler.ts). Confirmada en vivo 2026-09-09 vía get_board_info.
+  cliente: "text_mm5s75rw",
   descripcion: "text_mm5sx158",
   categoria: "color_mm5sqqv6",
   canal: "text_mm5twf9z",

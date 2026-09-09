@@ -30,6 +30,19 @@ export async function findEmpresaByGroupJid(groupJid: string): Promise<string | 
   return groups.get(groupJid);
 }
 
+// Inverso de findEmpresaByGroupJid — para el ruteo de avisos salientes de cambio de estado de
+// ticket ("si el ticket es de Spectrum, avisar en el grupo de Spectrum", pedido de Fernando
+// 2026-09-09, ver ticket-status-handler.ts). Si dos group_jid comparten empresa (pasa con RNR,
+// ver migrate-whatsapp-groups.ts) devuelve el primero que encuentra — no hay hoy un criterio
+// para desempatar entre grupos del mismo cliente.
+export async function findGroupJidByEmpresa(empresa: string): Promise<string | undefined> {
+  const groups = await loadGroups();
+  for (const [groupJid, groupEmpresa] of groups) {
+    if (groupEmpresa === empresa) return groupJid;
+  }
+  return undefined;
+}
+
 // Alta/reasignación idempotente de un grupo — usado por migrate-whatsapp-groups.ts (siembra
 // inicial, ver la clasificación en plans/2026-09-06-canal-whatsapp-evolution-api.md) y
 // disponible para altas puntuales de un cliente nuevo sin tener que escribir el INSERT a mano.

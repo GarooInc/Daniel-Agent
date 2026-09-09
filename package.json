@@ -15,7 +15,8 @@
     "migrate:faqs": "tsx src/migrate-faqs.ts",
     "migrate:tech-agents": "tsx src/migrate-tech-agents.ts",
     "migrate:agent-config": "tsx src/migrate-agent-config.ts",
-    "migrate:whatsapp-groups": "tsx src/migrate-whatsapp-groups.ts"
+    "migrate:whatsapp-groups": "tsx src/migrate-whatsapp-groups.ts",
+    "migrate:monday-clientes": "tsx src/migrate-monday-clientes.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

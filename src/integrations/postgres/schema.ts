@@ -183,4 +183,16 @@ CREATE TABLE IF NOT EXISTS client_wiki (
   fuentes TEXT[] NOT NULL DEFAULT '{}',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Mapeo texto libre de la columna "Cliente" del tablero de Monday (text_mm5s75rw, poblada por
+-- el agente de cada cliente al crear su propio ticket, no por Daniel) -> empresa como se usa
+-- en whatsapp_groups/tech_agents. Hace falta porque el valor no calza 1:1 (confirmado en vivo
+-- 2026-09-09: la columna trae "Rock N Rolla", pero whatsapp_groups.empresa para ese cliente es
+-- "RNR") — y porque ni siquiera está garantizado que venga poblada (el ticket de Rosero Construye
+-- la tenía vacía, solo el nombre en el título). Mismo espíritu que tech_agents/whatsapp_groups:
+-- sumar un cliente nuevo es un INSERT, no un deploy. Ver monday-webhook-handler.ts.
+CREATE TABLE IF NOT EXISTS monday_clientes (
+  monday_cliente TEXT PRIMARY KEY,
+  empresa TEXT NOT NULL
+);
 `;
