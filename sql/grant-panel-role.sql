@@ -48,3 +48,9 @@ GRANT SELECT ON chat_messages, webhook_raw_events TO support_panel_reader;
 -- protocolo que las líneas de arriba). Ruteo cliente->canal/bot del Agente Técnico + estado de
 -- los handoffs (pending/answered/timeout, causa_raiz, componente_afectado). Sin escritura.
 GRANT SELECT ON tech_agents, tech_agent_handoffs TO support_panel_reader;
+
+-- "Registro de actividad" del panel, tipo de evento "whatsapp" (2026-09-10), coordinado con la
+-- sesión de Support-Agent-Panel — pendiente de que Jorge confirme antes de correr este GRANT en
+-- producción (mismo protocolo que las líneas de arriba). Log crudo de mensajes de grupos de
+-- WhatsApp (whatsapp_messages_raw), TTL 30 días. Solo lectura.
+GRANT SELECT ON whatsapp_messages_raw TO support_panel_reader;

@@ -206,4 +206,23 @@ CREATE TABLE IF NOT EXISTS monday_clientes (
   monday_cliente TEXT PRIMARY KEY,
   empresa TEXT NOT NULL
 );
+
+-- Log crudo de mensajes de grupos de WhatsApp (2026-09-10, pedido del panel para la sección
+-- "Registro de actividad" — hoy solo tiene visibilidad del grupo interno "RedTec Dev" vía
+-- chat_messages, que se poda/borra y no distingue remitente). Mismo espíritu que
+-- webhook_raw_events: se loguea todo mensaje de grupo que llega por Evolution API, esté o no
+-- mapeado en whatsapp_groups y esté o no mencionado el bot, para no perder historial de grupos
+-- de clientes reales el día que tengan vía de ingesta propia. TTL de 30 días, misma limpieza
+-- periódica que webhook_raw_events (ver integrations/postgres/retention.ts). El panel joinea
+-- por group_jid contra whatsapp_groups para mostrar el cliente en vez del JID crudo.
+CREATE TABLE IF NOT EXISTS whatsapp_messages_raw (
+  id BIGSERIAL PRIMARY KEY,
+  group_jid TEXT NOT NULL,
+  participant TEXT,
+  participant_alt TEXT,
+  texto TEXT NOT NULL,
+  mentioned BOOLEAN NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS whatsapp_messages_raw_group_created_idx ON whatsapp_messages_raw (group_jid, created_at);
 `;

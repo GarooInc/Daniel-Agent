@@ -6,6 +6,7 @@ import { bufferMessage } from "../../messaging/debounce-queue.js";
 import { askDaniel, UnresolvedConversationError } from "../../agent/index.js";
 import { escalateUnresolvedConversation } from "../../agent/auto-escalate.js";
 import { sendGroupMessage } from "../../integrations/evolution-api/send-message.js";
+import { insertWhatsappMessage } from "../../integrations/postgres/whatsapp-messages.js";
 
 // Shape confirmado por Fernando 2026-09-08 (dump real de api-mainrealstate, mismo servidor
 // Evolution API): `contextInfo` es hermano de `message`, no anidado dentro de
@@ -64,9 +65,25 @@ export function registerMessageHandler(socket: Socket): void {
       "Mensaje de grupo de WhatsApp recibido",
     );
 
-    if (!mencionado) return;
-
     const texto = extractText(msg);
+
+    // Log crudo para el "Registro de actividad" del panel (2026-09-10, ver Pendiente en
+    // ESTADO-PROYECTO.md): todo mensaje de grupo, esté o no mapeado en whatsapp_groups y esté o
+    // no mencionado el bot — no gatea la respuesta de Daniel, solo deja historial. No bloquea el
+    // procesamiento del mensaje si falla.
+    if (texto) {
+      insertWhatsappMessage({
+        groupJid,
+        participant: msg.key.participant,
+        participantAlt: msg.key.participantAlt,
+        texto,
+        mentioned: mencionado,
+      }).catch((err) => {
+        logger.error({ err, groupJid }, "No se pudo loguear un mensaje de WhatsApp en whatsapp_messages_raw");
+      });
+    }
+
+    if (!mencionado) return;
     if (!texto) return;
 
     handleGroupMessage(groupJid, texto).catch((err) => {

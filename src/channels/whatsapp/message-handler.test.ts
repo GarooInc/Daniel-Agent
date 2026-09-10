@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const bufferMessage = vi.fn().mockResolvedValue(undefined);
 const INTERNAL_GROUP_JID = "120363392107150448@g.us";
 const getAgentConfig = vi.fn().mockResolvedValue({ whatsappInternalGroupJid: INTERNAL_GROUP_JID });
+const insertWhatsappMessage = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../../messaging/debounce-queue.js", () => ({ bufferMessage }));
 vi.mock("../../integrations/postgres/agent-config.js", () => ({ getAgentConfig }));
+vi.mock("../../integrations/postgres/whatsapp-messages.js", () => ({ insertWhatsappMessage }));
 vi.mock("../../config/env.js", () => ({
   env: { whatsappBotJid: "521555000@lid" },
 }));
@@ -89,5 +91,32 @@ describe("registerMessageHandler (WhatsApp)", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(bufferMessage).not.toHaveBeenCalled();
+  });
+
+  it("loguea en whatsapp_messages_raw un mensaje de un grupo de cliente aunque no responda", async () => {
+    const { socket, emit } = fakeSocket();
+    registerMessageHandler(socket);
+
+    emit("messages.upsert", upsert({ remoteJid: "120363000@g.us", mentionedJid: [] }));
+    await vi.waitFor(() => expect(insertWhatsappMessage).toHaveBeenCalled());
+
+    expect(insertWhatsappMessage).toHaveBeenCalledWith({
+      groupJid: "120363000@g.us",
+      participant: undefined,
+      participantAlt: undefined,
+      texto: "@Daniel hola, necesito ayuda",
+      mentioned: false,
+    });
+    expect(bufferMessage).not.toHaveBeenCalled();
+  });
+
+  it("loguea en whatsapp_messages_raw un mensaje del grupo interno mencionado", async () => {
+    const { socket, emit } = fakeSocket();
+    registerMessageHandler(socket);
+
+    emit("messages.upsert", upsert({}));
+    await vi.waitFor(() => expect(insertWhatsappMessage).toHaveBeenCalled());
+
+    expect(insertWhatsappMessage).toHaveBeenCalledWith(expect.objectContaining({ groupJid: INTERNAL_GROUP_JID, mentioned: true }));
   });
 });

@@ -12,6 +12,7 @@ const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // cada 6h alcanza de sobra para
 const RETENTION_POLICIES = [
   { table: "webhook_raw_events", column: "received_at", days: 30 },
   { table: "platform_metrics", column: "received_at", days: 7 },
+  { table: "whatsapp_messages_raw", column: "created_at", days: 30 },
 ] as const;
 
 async function runCleanup(): Promise<void> {
