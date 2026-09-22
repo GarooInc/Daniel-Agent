@@ -4,6 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es esto
 
+> **📍 Nota de infraestructura:** el panel del agente de soporte (Support Agent Panel, la UI de
+> administración que lee datos de este repo) ahora vive en **RedTec Portal**
+> (`RedtecPortal/redtec-portal-frontend/src/Garoo/SupportPanel/`, ruta `/support-panel`; backend en
+> `redtec-portal-backend`, rutas `/api/support-panel/*`). El repo standalone `Support-Agent-Panel`
+> (Next.js, hermano de este en `Agent-Support/`) quedó deprecado tras la migración de 2026-09-11/19
+> — detalle en `Agent-Support/Support-Agent-Panel/ESTADO.md`.
+
 Daniel es el agente de soporte (Slack) de RedTec, construido en Node.js/TypeScript + LangChain.js sobre OpenRouter. Recibe mensajes de clientes por Slack, responde con FAQs/estado de cuenta usando tools, y escala a Monday.com cuando hace falta un ticket humano. Un segundo agente ("Agente Técnico", Hermes Agent, desplegado aparte) audita n8n de clientes y le devuelve diagnósticos a Daniel por Slack.
 
 Para contexto histórico completo de decisiones, bugs encontrados/arreglados, y pendientes: **`ESTADO-PROYECTO.md`** (fuente de verdad del estado actual, se actualiza cada sesión) y **`NOTAS-INICIALES.md`** (diseño original v1). Los planes de features grandes viven en `plans/*.md`, commiteados al repo para poder retomarlos desde cualquier máquina.
