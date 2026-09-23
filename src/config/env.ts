@@ -63,4 +63,7 @@ export const env = {
   // vivo (mismo criterio que whatsappEvolutionInstance: valor estable, no hace falta cargarlo a
   // mano en cada deploy), overrideable si el grupo de prueba cambia.
   whatsappInternalGroupJid: process.env.WHATSAPP_INTERNAL_GROUP_JID || "120363392107150448@g.us",
+  // API Key para TypeSafe AI (Jev System One). Opcional: si no está seteado, se usa el modo
+  // simulado/calibrado para telemetría y pruebas sin bloquear el bot.
+  typesafeApiKey: process.env.TYPESAFE_API_KEY || process.env.JEV_API_KEY,
 };

@@ -225,4 +225,38 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages_raw (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS whatsapp_messages_raw_group_created_idx ON whatsapp_messages_raw (group_jid, created_at);
+
+-- Telemetría comparativa en Shadow Mode: LLM Tradicional vs Jev System One (TypeSafe AI).
+-- Almacena latencias, costos, predicciones y discrepancias para el dashboard ejecutivo.
+CREATE TABLE IF NOT EXISTS jev_benchmark_logs (
+  id BIGSERIAL PRIMARY KEY,
+  slack_user_id TEXT,
+  canal_origen TEXT DEFAULT 'slack',
+  mensaje_cliente TEXT NOT NULL,
+  
+  -- Métricas LLM Tradicional (OpenRouter / LangChain)
+  llm_latencia_ms INTEGER,
+  llm_costo_usd NUMERIC(10, 6),
+  llm_producto TEXT,
+  llm_urgencia TEXT,
+  llm_tipo_solicitud TEXT,
+  
+  -- Métricas Jev System One (TypeSafe AI)
+  jev_latencia_ms INTEGER,
+  jev_costo_usd NUMERIC(10, 6),
+  jev_producto TEXT,
+  jev_urgencia_score NUMERIC(4, 2),
+  jev_urgencia_label TEXT,
+  jev_tipo_solicitud TEXT,
+  jev_requiere_tecnico_prob NUMERIC(4, 2),
+  jev_intencion TEXT,
+  jev_confidence NUMERIC(4, 2),
+  
+  -- Métricas de rendimiento relativo
+  speedup_ratio NUMERIC(6, 2),
+  coincidencia_producto BOOLEAN,
+  coincidencia_tipo BOOLEAN,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS jev_benchmark_logs_created_at_idx ON jev_benchmark_logs (created_at DESC);
 `;

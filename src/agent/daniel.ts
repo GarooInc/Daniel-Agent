@@ -10,6 +10,8 @@ import { extractTicketFields } from "./extract-ticket-fields.js";
 import { listTechAgents } from "../integrations/postgres/tech-agents.js";
 import { getClientWiki } from "../integrations/postgres/client-wiki.js";
 import { getAgentConfig, buildSystemPrompt } from "../integrations/postgres/agent-config.js";
+import { evaluateWithJev } from "../integrations/jev/client.js";
+import { saveJevBenchmarkLog } from "../integrations/postgres/jev-benchmark.js";
 import { logger } from "../config/logger.js";
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -102,10 +104,39 @@ export async function askDaniel(
   // cada mensaje, sin depender de que el modelo principal decida llamar a escalar_a_monday
   // con los datos correctos. En paralelo con guardar el mensaje entrante: ninguno depende del
   // resultado del otro.
+  const llmStartTime = Date.now();
   const [, extracted] = await Promise.all([
     appendMessage(slackUserId, "human", userMessage),
     extractTicketFields(history, userMessage),
   ]);
+  const llmLatenciaMs = Date.now() - llmStartTime;
+
+  // Ejecución en Shadow Mode de Jev System One (en segundo plano, no bloquea el flujo de Daniel)
+  void (async () => {
+    try {
+      const jevResult = await evaluateWithJev(
+        userMessage,
+        history.map((m) => `${m.role}: ${m.content}`).slice(-3).join("\n"),
+        profile?.empresa,
+      );
+      // Costo aproximado del LLM tradicional (OpenRouter deepseek-v4-pro / gpt-5-mini: ~$0.015 USD promedio)
+      const llmCostoUsd = 0.0185;
+
+      await saveJevBenchmarkLog({
+        slackUserId,
+        canalOrigen: "slack",
+        mensajeCliente: userMessage,
+        llmLatenciaMs,
+        llmCostoUsd,
+        llmProducto: extracted.producto,
+        llmUrgencia: extracted.urgencia,
+        llmTipoSolicitud: extracted.tipoSolicitud,
+        jev: jevResult,
+      });
+    } catch (err) {
+      logger.warn({ err }, "Error no-bloqueante registrando telemetría shadow de Jev");
+    }
+  })();
 
   // Solo nombreCliente/email del perfil son campos de ticket — el resto (empresa, producto de
   // la cuenta contratada, plan, etc.) no lo son y "producto" en particular choca de tipo con
