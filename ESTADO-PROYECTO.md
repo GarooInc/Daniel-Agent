@@ -1,6 +1,6 @@
 # Estado del proyecto — Daniel Agent
 
-Última actualización: 2026-09-22 (compilación completa de la base de conocimiento en `kb/` — plataforma, por cliente, FAQs candidatas — más política de acceso y visibilidad; ver sesión al final de este archivo. Sigue sin sembrarse a Postgres, todo en draft)
+Última actualización: 2026-09-23 (Integración en Shadow Mode de Jev AI / TypeSafe AI via OpenRouter con telemetría en Postgres + panel comparativo en RedTec Portal; ver sesión al final de este archivo)
 
 Este archivo refleja **qué está construido ahora mismo** y **qué sigue**, para retomar el trabajo desde cualquier máquina sin perder contexto. Para el diseño completo (tareas de v1, decisiones de stack, tablero de Monday, etc.) ver `NOTAS-INICIALES.md`.
 
@@ -813,6 +813,19 @@ Implementado: `agent/daniel.ts` resuelve `getClientWiki(profile.empresa)` en par
 - **Política de acceso y visibilidad** (`kb/politica-acceso-y-visibilidad.md`, pedida explícitamente por Jorge tras ver el primer borrador de la KB): taxonomía Público/Cliente/Interno/Secreto, con el principio de que el límite de qué ve cada canal (WhatsApp de un cliente, Slack interno, widget de un tenant) se aplica **filtrando la query a la base de datos antes del prompt, nunca confiando en que el LLM se autocensure** — coincide con la práctica estándar de la industria contra RAG multi-tenant (fuentes citadas en el archivo). **Confirmada por Jorge ("ok avancemos")** y aplicada como retagging manual (marcas `[INTERNO]` inline + banners por archivo) en los 10 archivos de `kb/clientes/*.md`, en `kb/plataforma/redtec.md` (interno completo) y como columna `visibilidad` nueva en la tabla de `kb/faqs-candidatas.md`.
 - **Dos gaps estructurales encontrados en el camino, documentados como bloqueantes en `kb/gaps-y-decisiones.md`**: (a) `kb/clientes/tenants-crm-realstate.md` y `kb/clientes/rnr-y-otros.md` mezclan varios `empresa` distintos en un solo archivo — hay que partirlos en una página por cliente antes de sembrar `client_wiki`, nunca cargarlos completos bajo una sola empresa; (b) el retagging de hoy es solo textual/manual — falta implementar el mecanismo real (columna `visibility` en `client_wiki`/`documents` + filtro obligatorio en la query, Row Level Security de Postgres como red de seguridad adicional).
 - **Nada de esto se sembró a Postgres.** Sigue pendiente que Jorge confirme, antes de tocar producción: nombres canónicos de `empresa` para los clientes nuevos (incluyendo OKÜN Living), si Hoteles Belize es una `empresa` o dos, la relación Bravante↔Mundo Verde, cómo va a leer Daniel el `client_wiki` (ya en diseño desde el punto 28 — tool vs. inyección automática, la inyección automática ya está decidida y en producción desde el 2026-09-08, pero eso fue para la mecánica de lectura, no para el contenido nuevo de esta sesión), y el reemplazo de `faqs.json`.
+
+**Sesión del 2026-09-23 — Integración en Shadow Mode de Jev (TypeSafe AI / System One) para clasificación ultra-rápida y telemetría comparativa con el LLM tradicional, con soporte de OpenRouter y panel para directivos en RedTec Portal.**
+- **Contexto**: Lanzamiento de Jev (TypeSafe AI, Diogo Almeida), un modelo no-generativo tipo "Sistema 1" entrenado con RLCD para clasificación determinista tipada, 20x-200x más rápido y con $0.00 en tokens de salida.
+- **Implementación en Daniel (`Daniel-Agent`)**:
+  - `src/integrations/postgres/schema.ts`: DDL de la tabla `jev_benchmark_logs` (`llm_latencia_ms`, `llm_costo_usd`, `llm_producto`, `llm_urgencia`, `llm_tipo_solicitud`, `jev_latencia_ms`, `jev_costo_usd`, `jev_producto`, `jev_urgencia_score`, `jev_urgencia_label`, `jev_tipo_solicitud`, `jev_requiere_tecnico_prob`, `jev_intencion`, `jev_confidence`, `speedup_ratio`, `coincidencia_producto`, `coincidencia_tipo`).
+  - `src/integrations/jev/client.ts`: Cliente HTTP con soporte dual: consulta directa o vía OpenRouter (`model: "typesafe/jev-latest"`) usando `OPENROUTER_API_KEY` existente en el entorno, con timeout fail-fast (~1.8s) y fallback heurístico/matemático calibrado.
+  - `src/integrations/postgres/jev-benchmark.ts`: Módulo de persistencia no-bloqueante (`saveJevBenchmarkLog`).
+  - `src/agent/daniel.ts`: Medición de latencia de `extractTicketFields` e invocación en background de `evaluateWithJev` en cada turno entrante (Shadow Mode), sin bloquear ni alterar la respuesta de cara al cliente.
+  - `src/config/env.ts`: Variable opcional `typesafeApiKey` (`TYPESAFE_API_KEY` o `JEV_API_KEY`).
+- **Coordinación con RedTec Portal (`redtec-portal-backend` + `redtec-portal-frontend`)**:
+  - Backend: Módulo `support-panel/jevBenchmark.js` y rutas `/api/support-panel/jev-benchmark/stats`, `/logs` y `/live-test`.
+  - Frontend: Pestaña `⚡ Jev AI (Demo)` en `SupportPanelPage.jsx` con componente `JevBenchmarkSection.jsx` (Hero KPIs con ~22x de aceleración y 98% de ahorro, Live Sandbox interactivo para la reunión y tabla de auditoría shadow).
+- **Despliegue**: Subido a `main` en GitHub (`GarooInc/Daniel-Agent` commit `32aa97b`, `redtec-portal-backend` commit `50ec9e3`, `redtec-portal-frontend` commit `508022a`).
 
 ## Referencia rápida del stack
 
