@@ -54,3 +54,10 @@ GRANT SELECT ON tech_agents, tech_agent_handoffs TO support_panel_reader;
 -- producción (mismo protocolo que las líneas de arriba). Log crudo de mensajes de grupos de
 -- WhatsApp (whatsapp_messages_raw), TTL 30 días. Solo lectura.
 GRANT SELECT ON whatsapp_messages_raw TO support_panel_reader;
+
+-- Módulo de benchmark y sandbox en vivo de Jev AI (2026-09-24), coordinado con RedTec Portal:
+-- El panel corre estadísticas/logs (SELECT) y ejecuciones de prueba en vivo (INSERT).
+-- Se incluye USAGE/SELECT en la secuencia para evitar fallos por BIGSERIAL al insertar.
+GRANT SELECT, INSERT ON jev_benchmark_logs TO support_panel_reader;
+GRANT USAGE, SELECT ON SEQUENCE jev_benchmark_logs_id_seq TO support_panel_reader;
+
