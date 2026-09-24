@@ -1,6 +1,6 @@
 # Mundo Verde (`empresa`: `Mundo Verde` — ya existe en `whatsapp_groups`)
 
-> Bravante aparece en `whatsapp_groups` como cliente separado, pero según lo investigado es (o incluye) una compañía del grupo dentro del mismo Odoo de Mundo Verde — **relación a confirmar con el cliente/Fernando antes de fusionar o separar sus páginas de KB**. Fuentes: `RedtecPortal/mundo-verde-workflows/README.md` y `STATUS.md`, `RedtecPortal/redtec-portal-backend/PROYECTO_ODOO.md`, `RedtecPortal/redtec-portal-frontend/CLAUDE.md`, tickets de Monday "WhatsApp grupo (AGMundoV)".
+> Bravante aparece en `whatsapp_groups` como cliente separado, pero según lo investigado es (o incluye) una compañía del grupo dentro del mismo Odoo de Mundo Verde. **Decisión de Jorge (2026-09-24)**: fusionar bajo `empresa = Mundo Verde` mientras se confirma la relación exacta con el cliente/Fernando — esta página cubre ambos. Fuentes: `RedtecPortal/mundo-verde-workflows/README.md` y `STATUS.md`, `RedtecPortal/redtec-portal-backend/PROYECTO_ODOO.md`, `RedtecPortal/redtec-portal-frontend/CLAUDE.md`, tickets de Monday "WhatsApp grupo (AGMundoV)".
 >
 > **Visibilidad por defecto: Cliente** (scoped a Mundo Verde/Bravante). Las líneas marcadas **[INTERNO]** son detalle de arquitectura o cifras comparativas de negocio — nunca deben responderse en el canal de este cliente. Ver `kb/politica-acceso-y-visibilidad.md`.
 
@@ -53,11 +53,15 @@ Enganche: 20% en Torre Ígnea, 30% en Torre Etérea. Fecha de entrega: **a parti
 
 ## Escalamiento
 
-**Facturación:** contabilidad/tesorería del cliente (aprobaciones, revisión de discrepancias); encargada de ingreso de facturas (reclamos de facturas rechazadas). **Bravante:** el pool de asesoras de ventas. Técnico en ambos casos: implementador RedTec. **[INTERNO]** Admin del proyecto: Fernando Ortiz. Nota operativa: hoy los correos de error de facturación van a una sola persona hardcodeada — pendiente de generalizar.
+**Facturación:** contabilidad/tesorería del cliente (aprobaciones, revisión de discrepancias); encargada de ingreso de facturas (reclamos de facturas rechazadas). **Bravante:** el pool de asesoras de ventas. Técnico en ambos casos: implementador RedTec.
+
+**[INTERNO]** Admin del proyecto: Fernando Ortiz. Nota operativa: hoy los correos de error de facturación van a una sola persona hardcodeada — pendiente de generalizar.
 
 ## Estado actual
 
-**Facturación:** en producción con reclamos diarios de matcheo. La aprobación que crea documentos directamente en Odoo (Fase 12) y el "Proceso 2" (ingreso masivo sin orden de compra) todavía no están construidos. **[INTERNO — hallazgo de seguridad, ver también `kb/politica-acceso-y-visibilidad.md`]** Pendientes de negocio: las credenciales de Odoo están guardadas en Mongo (deberían migrar a una credencial de n8n), destinatarios de alertas hardcodeados, CORS abierto, una orden de compra duplicada sin resolver. Se planteó migrar los workflows de n8n al backend, no iniciado.
+**Facturación:** en producción con reclamos diarios de matcheo. La aprobación que crea documentos directamente en Odoo (Fase 12) y el "Proceso 2" (ingreso masivo sin orden de compra) todavía no están construidos.
+
+**[INTERNO — hallazgo de seguridad, ver también `kb/politica-acceso-y-visibilidad.md`]** Pendientes de negocio: las credenciales de Odoo están guardadas en Mongo (deberían migrar a una credencial de n8n), destinatarios de alertas hardcodeados, CORS abierto, una orden de compra duplicada sin resolver. Se planteó migrar los workflows de n8n al backend, no iniciado.
 
 **Bravante:** casi todos los incidentes listados arriba están resueltos; quedan solicitudes de reportes pendientes de construir (absorción por torre, embudo desde "Contactado", ventas por origen de lead, log centralizado de cotizaciones por asesor, recordatorios de pago a clientes con cuotas vencidas, exportar compradores con reserva a Excel/PDF).
 

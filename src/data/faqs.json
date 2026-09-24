@@ -1,130 +1,416 @@
 [
   {
-    "id": "isabella-001",
+    "id": "isabella-panel-001",
     "producto": "Isabella",
     "categoria": "uso",
-    "pregunta": "¿Cómo agenda una cita Isabella con un lead?",
-    "respuesta": "Isabella conversa con el lead por WhatsApp o el canal configurado, califica su interés y, si el lead está listo, le ofrece horarios disponibles tomados directamente de tu calendario conectado. Al confirmar, crea el evento y notifica al vendedor asignado.",
-    "tags": ["citas", "calendario", "agendamiento"]
+    "pregunta": "¿Dónde administro a Isabella?",
+    "respuesta": "En crm.redtec.ai, dentro del agente Isabella de tu empresa. El panel tiene Dashboard, CRM, Knowledge Base, Campañas y Configuración.",
+    "tags": ["panel", "crm.redtec.ai"],
+    "visibilidad": "cliente"
   },
   {
-    "id": "isabella-002",
+    "id": "isabella-panel-002",
     "producto": "Isabella",
     "categoria": "configuracion",
-    "pregunta": "¿Cómo conecto Isabella con mi calendario?",
-    "respuesta": "Desde el panel de administración, sección Integraciones > Calendario, autorizá el acceso con la cuenta de Google o Outlook donde llevás tus citas. Isabella sincroniza la disponibilidad cada 5 minutos.",
-    "tags": ["calendario", "integraciones", "configuracion"]
+    "pregunta": "¿Cómo cargo la información de un proyecto para que Isabella la use?",
+    "respuesta": "En Knowledge Base → Proyectos completás la ficha (información general, ubicación, amenidades, financiamiento, proceso de compra, FAQ y unidades). Al guardar, el texto que usa el agente se regenera solo; no hace falta vectorizar nada aparte.",
+    "tags": ["knowledge base", "proyectos"],
+    "visibilidad": "cliente"
   },
   {
-    "id": "isabella-003",
-    "producto": "Isabella",
-    "categoria": "funcionalidades",
-    "pregunta": "¿Isabella puede calificar leads automáticamente?",
-    "respuesta": "Sí. Isabella hace preguntas de calificación (presupuesto, urgencia, autoridad de compra) definidas en tu guion de ventas y etiqueta al lead como frío, tibio o caliente antes de pasarlo a un vendedor humano.",
-    "tags": ["leads", "calificacion", "ventas"]
-  },
-  {
-    "id": "isabella-004",
-    "producto": "Isabella",
-    "categoria": "funcionalidades",
-    "pregunta": "¿Qué canales de entrada soporta Isabella?",
-    "respuesta": "Isabella recibe leads desde formularios de Meta Ads, WhatsApp Business y formularios web embebidos. El canal de salida principal para conversar con el lead es WhatsApp.",
-    "tags": ["canales", "meta-ads", "whatsapp"]
-  },
-  {
-    "id": "isabella-005",
+    "id": "isabella-panel-003",
     "producto": "Isabella",
     "categoria": "configuracion",
-    "pregunta": "¿Cómo cambio el guion de ventas que usa Isabella?",
-    "respuesta": "El guion se edita en el panel de administración, sección Isabella > Guion de ventas. Los cambios se aplican a conversaciones nuevas de inmediato; las conversaciones ya en curso siguen con el guion que tenían al empezar.",
-    "tags": ["guion", "script", "configuracion"]
+    "pregunta": "Cargué la ficha de un proyecto pero Isabella sigue diciendo que el precio está \"pendiente\".",
+    "respuesta": "Probablemente sigue activa una entrada de texto manual vieja del mismo proyecto. En Knowledge Base → Base de conocimiento → Entradas de texto, desactivá la entrada vieja y dejá solo la generada por la ficha (project:N).",
+    "tags": ["knowledge base", "contradiccion", "precios"],
+    "visibilidad": "cliente"
   },
   {
-    "id": "isabella-006",
+    "id": "isabella-panel-004",
     "producto": "Isabella",
-    "categoria": "facturacion",
-    "pregunta": "¿Cómo se cobra el uso de Isabella?",
-    "respuesta": "Isabella se factura mensualmente según el plan contratado (Starter, Pro o Enterprise), con un límite de conversaciones activas por mes. Si superás el límite, se cobran conversaciones adicionales por bloque de 100.",
-    "tags": ["facturacion", "planes", "precios"]
-  },
-  {
-    "id": "sofi-001",
-    "producto": "Sofi",
-    "categoria": "funcionalidades",
-    "pregunta": "¿Qué tipo de contenido genera Sofi?",
-    "respuesta": "Sofi genera ideas y borradores de contenido para redes sociales: carruseles de LinkedIn, posts de Instagram, hilos de X y newsletters cortas, basados en tendencias del sector y en tu calendario de marketing.",
-    "tags": ["contenido", "redes-sociales", "marketing"]
-  },
-  {
-    "id": "sofi-002",
-    "producto": "Sofi",
     "categoria": "configuracion",
-    "pregunta": "¿Cómo conecto mis redes sociales a Sofi?",
-    "respuesta": "En el panel de administración, sección Sofi > Cuentas conectadas, autorizá el acceso a LinkedIn, Instagram o X con las credenciales de la cuenta de la empresa. Sofi necesita permisos de publicación para poder programar posts.",
-    "tags": ["integraciones", "redes-sociales", "configuracion"]
+    "pregunta": "¿El estado \"borrador\" de un proyecto impide que Isabella lo mencione?",
+    "respuesta": "No. El estado borrador/activo/cerrado es solo informativo; lo que usa el agente son las entradas activas de la Base de conocimiento.",
+    "tags": ["proyectos", "estado"],
+    "visibilidad": "cliente"
   },
   {
-    "id": "sofi-003",
-    "producto": "Sofi",
+    "id": "isabella-panel-005",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella puede enviar brochures, fotos o videos?",
+    "respuesta": "Sí. Los PDFs subidos en Base de conocimiento → Documentos sirven para responder y para reenviar el archivo al lead. Fotos/videos se envían por WhatsApp/Instagram/Messenger.",
+    "tags": ["media", "pdf", "brochure"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-006",
+    "producto": "Isabella",
     "categoria": "uso",
-    "pregunta": "¿Sofi publica automáticamente o necesita aprobación?",
-    "respuesta": "Por defecto, Sofi deja cada pieza de contenido en estado 'Borrador' esperando aprobación humana antes de publicar. Se puede activar publicación automática por tipo de contenido desde Configuración > Aprobaciones.",
-    "tags": ["aprobacion", "publicacion", "flujo"]
+    "pregunta": "¿Cómo tomo el control de una conversación de Isabella?",
+    "respuesta": "Desde CRM → Live Chat, apagá el toggle de IA de esa conversación (o el switch del lead) y escribí vos directamente.",
+    "tags": ["live chat", "handoff"],
+    "visibilidad": "cliente"
   },
   {
-    "id": "sofi-004",
-    "producto": "Sofi",
-    "categoria": "configuracion",
-    "pregunta": "¿Puedo definir un tono de marca específico para Sofi?",
-    "respuesta": "Sí. En Sofi > Voz de marca podés cargar ejemplos de contenido, palabras a evitar y una descripción del tono (formal, cercano, técnico, etc.). Sofi los usa como referencia en cada pieza que genera.",
-    "tags": ["tono", "marca", "personalizacion"]
-  },
-  {
-    "id": "sofi-005",
-    "producto": "Sofi",
-    "categoria": "facturacion",
-    "pregunta": "¿Qué planes tiene Sofi?",
-    "respuesta": "Sofi tiene plan Starter (hasta 15 piezas de contenido al mes, 1 red social), Pro (hasta 60 piezas, 3 redes sociales) y Enterprise (piezas ilimitadas, redes ilimitadas y soporte prioritario).",
-    "tags": ["facturacion", "planes", "precios"]
-  },
-  {
-    "id": "widget-001",
-    "producto": "widget-chatbot",
-    "categoria": "configuracion",
-    "pregunta": "¿Cómo instalo el widget en mi sitio web?",
-    "respuesta": "Copiá el snippet de instalación desde el panel de administración, sección Widget > Instalación, y pegalo antes del cierre de la etiqueta </body> en tu sitio. El widget aparece automáticamente unos minutos después.",
-    "tags": ["instalacion", "snippet", "configuracion"]
-  },
-  {
-    "id": "widget-002",
-    "producto": "widget-chatbot",
-    "categoria": "configuracion",
-    "pregunta": "¿Puedo personalizar los colores y el logo del widget?",
-    "respuesta": "Sí, desde Widget > Apariencia podés cambiar el color principal, la posición en pantalla (izquierda/derecha), el logo y el mensaje de bienvenida.",
-    "tags": ["personalizacion", "apariencia", "branding"]
-  },
-  {
-    "id": "widget-003",
-    "producto": "widget-chatbot",
-    "categoria": "funcionalidades",
-    "pregunta": "¿El widget funciona bien en dispositivos móviles?",
-    "respuesta": "Sí, el widget se adapta automáticamente a pantallas móviles y se muestra como una ventana de pantalla completa en vez de un recuadro flotante.",
-    "tags": ["mobile", "responsive", "funcionalidades"]
-  },
-  {
-    "id": "widget-004",
-    "producto": "widget-chatbot",
-    "categoria": "configuracion",
-    "pregunta": "¿Cómo entreno al widget con la información de mi negocio?",
-    "respuesta": "Cargá documentos, PDFs o un enlace a tu sitio web en Widget > Base de conocimiento. El widget indexa ese contenido y lo usa para responder preguntas de tus visitantes.",
-    "tags": ["entrenamiento", "base-de-conocimiento", "configuracion"]
-  },
-  {
-    "id": "widget-005",
-    "producto": "widget-chatbot",
+    "id": "isabella-panel-007",
+    "producto": "Isabella",
     "categoria": "uso",
-    "pregunta": "¿Qué pasa si el widget no puede responder una pregunta de un visitante?",
-    "respuesta": "El widget le avisa al visitante que va a derivar la consulta a un humano, y crea una notificación para el equipo de soporte con el historial de la conversación.",
-    "tags": ["escalacion", "soporte", "fallback"]
+    "pregunta": "El Live Chat dice que la ventana de 24 h de Meta está cerrada, ¿qué hago?",
+    "respuesta": "Meta no entrega mensajes iniciados por el negocio si el contacto no escribió en las últimas 24 h. Hay que esperar a que el contacto vuelva a escribir, o usar otro canal (llamada, correo, plantilla aprobada).",
+    "tags": ["whatsapp", "24h", "meta"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "isabella-panel-008",
+    "producto": "Isabella",
+    "categoria": "configuracion",
+    "pregunta": "¿Cómo edito las instrucciones/comportamiento de Isabella?",
+    "respuesta": "La sección \"Configurar\" del agente tiene 5 pestañas: Identidad (nombre, qué vende, avatar, mensaje de bienvenida), Comportamiento (system prompt completo y config de follow-up), WhatsApp, Modelo y Voz. Los cambios se aplican de inmediato, sin redeploy.",
+    "tags": ["prompt", "comportamiento"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-009",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella hace seguimiento a leads que dejan de responder?",
+    "respuesta": "Sí, si se activa en Configuración → Leads → Retención/follow-up. Respeta horario de silencio (por defecto 20:00–08:00), horas entre intentos y un máximo de intentos.",
+    "tags": ["follow-up", "retencion"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-010",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Se pueden reasignar leads si un asesor no los contacta a tiempo?",
+    "respuesta": "Sí, con \"Reasignación por inactividad\" (Configuración → Leads): reasigna leads en estado \"nuevo\" en round-robin, dentro del horario laboral (L–V 09:00–18:00).",
+    "tags": ["asesores", "round-robin"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-011",
+    "producto": "Isabella",
+    "categoria": "configuracion",
+    "pregunta": "¿Puedo cambiar las etapas del pipeline de ventas?",
+    "respuesta": "Sí, en Configuración → Pipeline: nombre, color y tipo de etapa (abierta/ganada/perdida/archivada). La clave interna de cada etapa no se puede editar.",
+    "tags": ["pipeline", "etapas"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-012",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella agenda citas?",
+    "respuesta": "Sí, en la agenda del CRM (llamada, visita virtual, showroom, sincronizado con Google Calendar). Horarios, días bloqueados, ubicaciones y recordatorios se configuran en Configuración → Agenda.",
+    "tags": ["citas", "agenda", "calendario"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-013",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella puede generar cotizaciones?",
+    "respuesta": "Sí, en CRM → Cotizaciones se generan PDFs de un proyecto/unidad con el diseño configurado en la ficha del proyecto.",
+    "tags": ["cotizaciones"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-014",
+    "producto": "Isabella",
+    "categoria": "integraciones",
+    "pregunta": "¿Con qué CRMs externos se integra crm.redtec.ai?",
+    "respuesta": "Sync nativo con GoHighLevel y Odoo (lo activa un superadmin). Otros CRMs, como Pipedrive, se integran con un flujo de n8n que recibe los eventos del tenant por webhook.",
+    "tags": ["crm", "pipedrive", "odoo", "ghl"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-015",
+    "producto": "Isabella",
+    "categoria": "integraciones",
+    "pregunta": "¿Qué eventos puede recibir mi sistema por webhook desde redtec.ai?",
+    "respuesta": "Lead creado, lead cambia de etapa, cita agendada/cancelada, unidad cambia de estado, cotización generada, ticket de soporte creado o cambia de estado, y documento de cliente subido. Los webhooks van firmados con HMAC y tienen logs de entrega en API RED → Webhooks.",
+    "tags": ["webhooks", "hmac", "api"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-016",
+    "producto": "Isabella",
+    "categoria": "integraciones",
+    "pregunta": "¿Existe una API REST pública de redtec.ai?",
+    "respuesta": "Todavía no (\"Próximamente\"). Sí están disponibles los webhooks firmados y un servidor MCP en hub.redtec.ai/mcp (header x-user-api-key) — cualquier API Key activa del tenant (o de un usuario específico) sirve para autenticarse ahí.",
+    "tags": ["api", "mcp"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-017",
+    "producto": "Isabella",
+    "categoria": "canales",
+    "pregunta": "¿En qué canales atiende Isabella?",
+    "respuesta": "WhatsApp (webhook del tenant o vía ManyChat), Instagram y Messenger. Opcionalmente, grupos de WhatsApp por Evolution API y un canal interno de Slack para el equipo.",
+    "tags": ["canales", "whatsapp", "slack"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-018",
+    "producto": "Isabella",
+    "categoria": "funcionalidades",
+    "pregunta": "¿Isabella puede hacer o recibir llamadas?",
+    "respuesta": "Sí, con un agente de voz de ElevenLabs registrado en Configuración → Agente → Voz. El registro y las campañas de llamadas se ven en CRM → Llamadas. Las llamadas pueden grabarse y transcribirse.",
+    "tags": ["voz", "elevenlabs", "llamadas"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "isabella-panel-019",
+    "producto": "Isabella",
+    "categoria": "integraciones",
+    "pregunta": "¿Puedo medir el rendimiento de campañas de Meta Ads desde el panel?",
+    "respuesta": "Sí. Se conecta Conversions API (Dataset/Pixel ID, cuenta publicitaria, token) en la ficha del tenant. La pestaña Campañas muestra conversaciones, citas agendadas y costo por campaña.",
+    "tags": ["meta ads", "campañas"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "redtecai-001",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "¿Cada proyecto puede tener su propia información y reglas?",
+    "respuesta": "Sí: precios, inventario, amenidades, ubicación, FAQs y reglas de venta se configuran por proyecto.",
+    "tags": ["proyectos", "configuracion"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-002",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "¿Los agentes de redtec.ai hablan español e inglés?",
+    "respuesta": "Sí, son configurables para atención bilingüe.",
+    "tags": ["idioma", "bilingue"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-003",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "¿Quién hace la configuración inicial de mi cuenta?",
+    "respuesta": "RedTec se encarga del setup completo: levanta proyectos, procesos, FAQs, estructura del CRM, documentos y canales; después configura, entrena, prueba y optimiza.",
+    "tags": ["onboarding", "setup"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-004",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "¿Los agentes actualizan mi CRM automáticamente?",
+    "respuesta": "Sí, según el CRM conectado y los permisos configurados: estado del lead, notas, siguiente paso, vendedor asignado y citas.",
+    "tags": ["crm", "automatizacion"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-005",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "¿Puedo probar la plataforma antes de contratar?",
+    "respuesta": "Sí, hay una demo de 15 días sin cobro al guardar la tarjeta, desde \"Activate a demo\" en el login de crm.redtec.ai.",
+    "tags": ["demo", "prueba"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-006",
+    "producto": "redtec.ai",
+    "categoria": "uso",
+    "pregunta": "Olvidé mi contraseña de crm.redtec.ai, ¿qué hago?",
+    "respuesta": "En la pantalla de login, usá \"Forgot your password?\" para restablecerla.",
+    "tags": ["contraseña", "login"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-007",
+    "producto": "redtec.ai",
+    "categoria": "seguridad",
+    "pregunta": "¿A qué proveedores de IA se envían los datos de mis conversaciones?",
+    "respuesta": "A Anthropic, OpenRouter, u otros que el tenant tenga configurados. Se les envían los mensajes y extractos de la base de conocimiento; RedTec indica que no se usan para entrenar sus propios modelos.",
+    "tags": ["privacidad", "proveedores", "ia"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtecai-008",
+    "producto": "redtec.ai",
+    "categoria": "seguridad",
+    "pregunta": "¿Quién es responsable del consentimiento para llamadas y campañas salientes (TCPA)?",
+    "respuesta": "El cliente, antes de lanzar la campaña o la llamada saliente — igual que el cumplimiento de Fair Housing y el consentimiento de grabación en jurisdicciones \"all-party\".",
+    "tags": ["tcpa", "cumplimiento", "legal"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "concierge-001",
+    "producto": "Agentes concierge (n8n)",
+    "categoria": "soporte",
+    "pregunta": "El bot dejó de responderle a un usuario que ya había escrito antes.",
+    "respuesta": "Causa frecuente y ya conocida: falla al actualizar el usuario en MongoDB por un _id mal serializado (bug corregido en todos los clientes de la plantilla concierge). Si reaparece, escalar a técnico con el ID de ManyChat del usuario afectado.",
+    "tags": ["bug", "mongo", "id"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "concierge-002",
+    "producto": "Agentes concierge (n8n)",
+    "categoria": "soporte",
+    "pregunta": "El bot dijo que escaló mi caso, pero nadie me contactó.",
+    "respuesta": "Revisar primero si la notificación por correo se envió de verdad. El Convento ya tiene una red de seguridad que fuerza el aviso cuando la categoría es \"escalamiento\"; en otros clientes esto puede fallar si el modelo no llamó la tool — escalar a técnico.",
+    "tags": ["escalamiento", "notificaciones"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "concierge-003",
+    "producto": "Agentes concierge (n8n)",
+    "categoria": "soporte",
+    "pregunta": "La base de conocimiento del bot responde información vieja después de actualizarla.",
+    "respuesta": "Hay que correr el workflow manual \"Vectorizar KB\" de ese cliente — borra y vuelve a cargar los documentos. Es manual a propósito.",
+    "tags": ["kb", "vectorizar"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "concierge-004",
+    "producto": "Agentes concierge (n8n)",
+    "categoria": "soporte",
+    "pregunta": "Probé el bot con el botón \"Probar Solicitud\" de ManyChat y el canal de ingreso llegó vacío.",
+    "respuesta": "Es esperado: ese botón de prueba no manda el custom field canal_ingreso. Para probar de verdad hay que escribir un mensaje real desde el canal (WhatsApp/Instagram/Messenger).",
+    "tags": ["manychat", "pruebas"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "crm-realstate-infra-001",
+    "producto": "CRM Realstate (infra)",
+    "categoria": "soporte",
+    "pregunta": "Varios clientes de crm.redtec.ai (Isabella/Sofía) dejaron de responder al mismo tiempo.",
+    "respuesta": "Causa conocida (2026-09-16): un lock de Redis se cuelga en redtec-realstate-api porque LangSmith se satura sin timeout, y eso afecta a todos los tenants de ese mismo contenedor. Es un incidente de infraestructura — escalar como urgente, no diagnosticar por tenant.",
+    "tags": ["infraestructura", "redis", "urgente"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "crm-realstate-infra-002",
+    "producto": "CRM Realstate (infra)",
+    "categoria": "soporte",
+    "pregunta": "Un tenant de crm.redtec.ai figura \"Inactivo\" aunque ya tiene agentes configurados.",
+    "respuesta": "Falta completar el mínimo para activarlo: elegir el modelo (LLM) y conectar el token de ManyChat. El panel lo indica explícito en la ficha del tenant. Casos vistos: Grupo Paz, OKÜN Living (Grupo VEQ).",
+    "tags": ["onboarding", "activacion"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "crm-realstate-infra-003",
+    "producto": "CRM Realstate (infra)",
+    "categoria": "soporte",
+    "pregunta": "Un cliente reporta que \"Daniel\" no le contesta dentro de crm.redtec.ai.",
+    "respuesta": "Daniel es uno de los 6 agentes activables por tenant dentro del panel (junto a Isabella, Sofi, Walter, Arturo, Marco) — hay que confirmar primero si está activado para ese tenant específico (\"Agentes · N/6 activos\" en la ficha del cliente) antes de tratarlo como una falla. Al 2026-09-22 estaba activo en Cofiño, Grupo Paz, Mundo Verde y Rosero Construye, pero no en el resto.",
+    "tags": ["daniel", "roster", "activacion"],
+    "visibilidad": "interno"
+  },
+  {
+    "id": "soporte-redtec-001",
+    "producto": "Soporte RedTec",
+    "categoria": "uso",
+    "pregunta": "¿Qué es \"Rita\" en crm.redtec.ai?",
+    "respuesta": "Es un agente distinto de Daniel: vive dentro del propio panel (widget de voz ElevenLabs) y atiende dudas de los admins de un tenant sobre cómo usar el CRM, creando tickets en Monday cuando detecta un problema real — en el mismo tablero \"Soporte y Emergencias\" que usa Daniel. Daniel, en cambio, atiende a los clientes finales por Slack/WhatsApp.",
+    "tags": ["rita", "soporte", "agente"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "soporte-redtec-002",
+    "producto": "Soporte RedTec",
+    "categoria": "uso",
+    "pregunta": "¿Qué es el rol \"Empleado\" en crm.redtec.ai?",
+    "respuesta": "Un rol de usuario con acceso acotado a la sección \"Mis tickets\": recibe ahí los tickets de soporte que Daniel le asigna dentro de uno o más proyectos/tenants. Es distinto de \"Agente\" (uso diario del CRM: Prospectos, Live Chat, Agenda) y de \"Admin\" (gestiona usuarios, configuración e integraciones del tenant).",
+    "tags": ["roles", "empleado", "tickets"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "soporte-redtec-003",
+    "producto": "Soporte RedTec",
+    "categoria": "uso",
+    "pregunta": "¿Qué reportes automáticos manda el CRM por correo?",
+    "respuesta": "Por tenant, hay 3 notificaciones configurables: Reporte diario (9:00 AM Guatemala, resumen de leads/funnel/Hot-Warm-Cold), Reporte mensual (día 1, con Excel de todos los leads) y un aviso de \"Clientes potenciales\" al grupo de WhatsApp del staff (12:00 y 17:00, solo informa, no modifica el CRM).",
+    "tags": ["reportes", "notificaciones"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "soporte-redtec-004",
+    "producto": "Soporte RedTec",
+    "categoria": "uso",
+    "pregunta": "¿Cómo reporto un problema con mi agente o automatización?",
+    "respuesta": "Escribile a Daniel por Slack o por el grupo de WhatsApp interno con qué pasó, cuándo, y un ejemplo (usuario o conversación afectada). Si hace falta, Daniel crea un ticket en Monday y avisa cuando cambie de estado.",
+    "tags": ["tickets", "monday"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "soporte-redtec-005",
+    "producto": "Soporte RedTec",
+    "categoria": "uso",
+    "pregunta": "¿Me avisan cuando se resuelva mi ticket de soporte?",
+    "respuesta": "Sí. Cuando el ticket cambia de estado en Monday, Daniel avisa en el mismo canal o grupo de WhatsApp donde se reportó, si tu empresa tiene ese grupo mapeado.",
+    "tags": ["tickets", "notificaciones"],
+    "visibilidad": "publico"
+  },
+  {
+    "id": "redtec-portal-001",
+    "producto": "RedTec Portal",
+    "categoria": "uso",
+    "pregunta": "¿Qué es el RedTec Portal?",
+    "respuesta": "El portal web de servicios de RedTec, con un módulo dedicado para tu empresa (facturación, leads, reportes u otro, según tu contrato) y un panel de administración de agentes para el equipo interno de RedTec.",
+    "tags": ["portal"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "mundo-verde-facturas-001",
+    "producto": "Mundo Verde (facturas)",
+    "categoria": "soporte",
+    "pregunta": "Mi factura fue rechazada con \"FACTURA YA EXISTE EN ODOO\".",
+    "respuesta": "El sistema rechaza automáticamente si la Serie + Número ya existen en Odoo. Si es un falso positivo (por ejemplo, es de otra compañía del mismo grupo), escalar a técnico con el número de orden de compra y el DTE.",
+    "tags": ["facturas", "duplicado"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "mundo-verde-facturas-002",
+    "producto": "Mundo Verde (facturas)",
+    "categoria": "soporte",
+    "pregunta": "Ya corrigieron el error de mi factura pero sigue fallando igual.",
+    "respuesta": "No reintentar la ejecución vieja en n8n — hay que volver a subir la factura por el portal para que se genere un proceso nuevo con la corrección ya aplicada.",
+    "tags": ["facturas", "retry"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "mundo-verde-facturas-003",
+    "producto": "Mundo Verde (facturas)",
+    "categoria": "soporte",
+    "pregunta": "La comparación automática marca una discrepancia en el total o los impuestos de mi factura.",
+    "respuesta": "Si la factura tiene retención de ISR, es normal: Odoo guarda los totales netos de esa retención y el cotejo ya lo tolera (fila \"Retención ISR\" visible). Si la discrepancia persiste, revisar que el emisor del PDF coincida exactamente con el proveedor cargado en Odoo.",
+    "tags": ["facturas", "isr", "discrepancia"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "bravante-001",
+    "producto": "Bravante",
+    "categoria": "soporte",
+    "pregunta": "¿Cuál es la vigencia de una cotización de Bravante?",
+    "respuesta": "15 días desde que se genera.",
+    "tags": ["cotizacion", "vigencia"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "bravante-002",
+    "producto": "Bravante",
+    "categoria": "soporte",
+    "pregunta": "¿Qué enganche piden en Bravante y para cuándo es la entrega?",
+    "respuesta": "20% en Torre Ígnea, 30% en Torre Etérea; entrega a partir de mayo de 2028.",
+    "tags": ["enganche", "entrega"],
+    "visibilidad": "cliente"
+  },
+  {
+    "id": "bravante-003",
+    "producto": "Bravante",
+    "categoria": "soporte",
+    "pregunta": "La cotización en PDF de Bravante sale con metros cuadrados en 0, precio viejo o sin imagen de planta.",
+    "respuesta": "Es un problema de datos del catálogo (mv_units) o de un archivo de imagen faltante — hay que escalar a técnico con la unidad (ej. B-605), el modelo y la torre exactos para que se corrija en el catálogo.",
+    "tags": ["cotizacion", "catalogo"],
+    "visibilidad": "interno"
   }
 ]

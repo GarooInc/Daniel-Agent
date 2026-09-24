@@ -10,7 +10,9 @@ Spectrum Vivienda, inmobiliaria guatemalteca con 5 proyectos de **apartamentos**
 
 RedTec opera **dos agentes** para Spectrum:
 1. **Sof-IA** (n8n, `agentsprod.redtec.ai`) — el chatbot comercial real y en producción. Captura y califica leads, responde sobre proyectos, agenda citas (RSVP), sincroniza al CRM Dynamics 365 del cliente.
-2. Un **tenant nativo en CRM Realstate** (`crm.redtec.ai`, KB con 195 entradas) — provisionado pero la migración (interna "SPEC-A24") está **incompleta**; hoy el que atiende tráfico real es Sof-IA en n8n, no el tenant nativo. **[INTERNO] Confirmado en vivo (2026-09-22)**: el tenant nativo (agente "Sof-IA · anthropic/claude-sonnet-5") tiene apenas 8 contactos, 0 mensajes y 0 conversaciones activas — solo 1 de los 6 agentes del roster está activo. Esto confirma que el tráfico real de verdad pasa por n8n, no por acá.
+2. Un **tenant nativo en CRM Realstate** (`crm.redtec.ai`, KB con 195 entradas) — provisionado pero la migración (interna "SPEC-A24") está **incompleta**; hoy el que atiende tráfico real es Sof-IA en n8n, no el tenant nativo.
+
+**[INTERNO] Confirmado en vivo (2026-09-22)**: el tenant nativo (agente "Sof-IA · anthropic/claude-sonnet-5") tiene apenas 8 contactos, 0 mensajes y 0 conversaciones activas — solo 1 de los 6 agentes del roster está activo. Esto confirma que el tráfico real de verdad pasa por n8n, no por acá.
 
 ## Sistemas y componentes (n8n) **[INTERNO]**
 

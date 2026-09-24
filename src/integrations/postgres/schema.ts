@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx ON documents USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS documents_producto_idx ON documents (producto);
 
+-- 2026-09-24: visibilidad de cada FAQ (ver kb/politica-acceso-y-visibilidad.md). 'interno' es
+-- diagnóstico técnico que nunca debe salir en un canal de cliente — filtrado en
+-- searchFaqsBySimilarity, nunca dejado a que el LLM se autocensure. 'publico'/'cliente' no se
+-- filtran todavía (ninguna FAQ de ese tipo es específica de un cliente puntual, ver ESTADO-PROYECTO.md).
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS visibilidad TEXT NOT NULL DEFAULT 'publico';
+
 -- Equivalente a "customers": perfil de Slack + cuenta real, clave canónica email.
 CREATE TABLE IF NOT EXISTS customers (
   id BIGSERIAL PRIMARY KEY,

@@ -1,6 +1,6 @@
-# Hoteles Belize — Itz'ana y Ka'ana (`empresa` propuesta: `Hoteles Belize`)
+# Hoteles Belize — Itz'ana y Ka'ana (`empresa`: `Hoteles Belize`)
 
-> Alias: Itz'ana, Ka'ana, ITZ, KAA, KNN, HotelesBelize. **No existe todavía en las tablas de Daniel.** Decisión pendiente para Jorge: ¿una sola `empresa` "Hoteles Belize" con secciones por propiedad, o dos separadas? Recomendación de esta compilación: **una sola**, porque comparten cuenta ManyChat, workflows y KB (solo se separan por el campo `propiedad`). Fuentes: `Agent-Belize/CLAUDE.md`, `Agent-Belize/wiki/architecture.md`, `Agent-Belize/wiki/status.md`, `Agent-Belize/wiki/roadmap.md`.
+> Alias: Itz'ana, Ka'ana, ITZ, KAA, KNN, HotelesBelize. **No existe todavía en las tablas de Daniel.** **Decisión de Jorge (2026-09-24)**: una sola `empresa` "Hoteles Belize" con secciones por propiedad — comparten cuenta ManyChat, workflows y KB (solo se separan por el campo `propiedad`). Fuentes: `Agent-Belize/CLAUDE.md`, `Agent-Belize/wiki/architecture.md`, `Agent-Belize/wiki/status.md`, `Agent-Belize/wiki/roadmap.md`.
 >
 > **Visibilidad por defecto: Cliente** (scoped a Hoteles Belize). Las secciones marcadas **[INTERNO]** son detalle de arquitectura/diagnóstico de RedTec — nunca deben responderse en el canal de este cliente. Ver `kb/politica-acceso-y-visibilidad.md`.
 

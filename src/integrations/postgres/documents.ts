@@ -11,17 +11,27 @@ import type { Faq } from "../../knowledge-base/types.js";
 export async function upsertFaqDocument(faq: Faq, embedding: number[]): Promise<void> {
   const pool = await getPool();
   await pool.query(
-    `INSERT INTO documents (id, producto, categoria, pregunta, respuesta, tags, embedding, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+    `INSERT INTO documents (id, producto, categoria, pregunta, respuesta, tags, visibilidad, embedding, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
      ON CONFLICT (id) DO UPDATE SET
        producto = EXCLUDED.producto,
        categoria = EXCLUDED.categoria,
        pregunta = EXCLUDED.pregunta,
        respuesta = EXCLUDED.respuesta,
        tags = EXCLUDED.tags,
+       visibilidad = EXCLUDED.visibilidad,
        embedding = EXCLUDED.embedding,
        updated_at = now()`,
-    [faq.id, faq.producto, faq.categoria, faq.pregunta, faq.respuesta, faq.tags ?? null, pgvector.toSql(embedding)],
+    [
+      faq.id,
+      faq.producto,
+      faq.categoria,
+      faq.pregunta,
+      faq.respuesta,
+      faq.tags ?? null,
+      faq.visibilidad,
+      pgvector.toSql(embedding),
+    ],
   );
 }
 
@@ -49,10 +59,11 @@ export async function searchFaqsBySimilarity(
   const embeddingSql = pgvector.toSql(queryEmbedding);
 
   const result = await pool.query<FaqSearchResult>(
-    `SELECT id, producto, categoria, pregunta, respuesta, tags,
+    `SELECT id, producto, categoria, pregunta, respuesta, tags, visibilidad,
             1 - (embedding <=> $1) AS score
      FROM documents
      WHERE ($2::text IS NULL OR producto = $2)
+       AND visibilidad <> 'interno'
      ORDER BY embedding <=> $1
      LIMIT $3`,
     [embeddingSql, opts.producto ?? null, limit],

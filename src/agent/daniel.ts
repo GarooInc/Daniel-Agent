@@ -8,7 +8,7 @@ import { clearTicketDraft, getTicketDraft, saveTicketDraftFields, type TicketDra
 import { FIELD_LABELS, findMissingFields, mergeTicketFields } from "./tools/ticket-fields.js";
 import { extractTicketFields } from "./extract-ticket-fields.js";
 import { listTechAgents } from "../integrations/postgres/tech-agents.js";
-import { getClientWiki } from "../integrations/postgres/client-wiki.js";
+import { getClientWiki, stripInternalContent } from "../integrations/postgres/client-wiki.js";
 import { getAgentConfig, buildSystemPrompt } from "../integrations/postgres/agent-config.js";
 import { evaluateWithJev } from "../integrations/jev/client.js";
 import { saveJevBenchmarkLog } from "../integrations/postgres/jev-benchmark.js";
@@ -58,7 +58,12 @@ function buildKnownDataNote(effectiveDraft: TicketDraftFields): string {
 // consultar algo, sino dárselo ya resuelto.
 function buildClientWikiNote(empresa: string, wikiContenido: string | undefined): string {
   if (!wikiContenido) return "";
-  return `\n\nConocimiento técnico ya registrado sobre el sistema de ${empresa} (de diagnósticos previos del equipo técnico) — usalo para responder preguntas sobre su sistema sin tener que consultar de nuevo:\n${wikiContenido}`;
+  // Daniel le habla directo a gente del propio cliente (Slack) o al grupo interno de WhatsApp —
+  // nunca a un canal donde el contenido [INTERNO] de client_wiki sea seguro de citar tal cual,
+  // así que se filtra siempre acá, no según el canal (ver stripInternalContent).
+  const contenidoSeguro = stripInternalContent(wikiContenido);
+  if (!contenidoSeguro) return "";
+  return `\n\nConocimiento técnico ya registrado sobre el sistema de ${empresa} (de diagnósticos previos del equipo técnico) — usalo para responder preguntas sobre su sistema sin tener que consultar de nuevo:\n${contenidoSeguro}`;
 }
 
 export async function askDaniel(
